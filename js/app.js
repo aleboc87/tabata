@@ -493,6 +493,8 @@
     var check = Plan.validate(cfg);
     if (!check.ok) { Nav.show("setup"); refreshSetup(); return; }
     Sound.unlock();
+    Speech.unlock();
+    lastSpoken = -1;
     var phases = Plan.buildPhases(check.values);
     runner = new TabataRunner(phases);
     var w = loadedId ? store.get(loadedId) : null;
@@ -548,6 +550,14 @@
     runner = null;
   }
 
+  var lastSpoken = -1;   // phase whose exercise name was already handled
+  /** Says the exercise name (or "Next, ...") when a new phase begins. */
+  function speakPhase() {
+    if (muted || runner.paused) return;
+    var a = Plan.announcement(runner.phases, runner.idx);
+    if (a) Speech.say(a.text, a.next, 900);
+  }
+
   function stepRun(t) {
     var events = runner.update(t);
     if (runner.jumps !== lastJumps) {
@@ -558,6 +568,7 @@
       finishRun();
       return false;
     }
+    if (runner.idx !== lastSpoken && !runner.paused) { lastSpoken = runner.idx; speakPhase(); }
     Sound.sync(runner, t);
     return true;
   }

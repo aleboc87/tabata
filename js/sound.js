@@ -112,6 +112,7 @@
       });
     });
     scheduled = {};
+    if (root.Speech) root.Speech.cancel(); // a spoken name stops with everything else
   }
 
   /** The sounds of one phase, as offsets in ms from its start. */

@@ -205,6 +205,40 @@
     return out;
   }
 
+  /**
+   * What the voice says when phase idx begins, or null. Only exercises with a name are spoken.
+   * { text, next }: next = true means "Next, <name>" (said during Get ready or a rest, before the exercise
+   * changes); otherwise the name alone (when an exercise starts right after another one).
+   * The same exercise is never repeated for every round.
+   */
+  function announcement(phases, idx) {
+    var p = phases[idx];
+    if (!p) return null;
+    var prevWork = "";
+    for (var i = idx - 1; i >= 0; i--) {
+      if (phases[i].type === "work") { prevWork = phases[i].name || ""; break; }
+    }
+    var quiet = { prep: 1, rest: 1, between: 1 };
+    if (quiet[p.type]) {
+      var nxt = null;
+      for (var j = idx + 1; j < phases.length; j++) {
+        if (phases[j].type === "work") { nxt = phases[j]; break; }
+        if (phases[j].type === "cool") break;
+      }
+      // a rest followed by the block rest leaves the announcement to the block rest
+      if (!nxt || !nxt.name || nxt.name === prevWork) return null;
+      var after = phases[idx + 1];
+      if (p.type === "rest" && after && after.type === "between") return null;
+      return { text: nxt.name, next: true };
+    }
+    if (p.type === "work" && p.name && p.name !== prevWork) {
+      var before = phases[idx - 1];
+      if (before && quiet[before.type]) return null; // it was announced during the rest before
+      return { text: p.name, next: false };
+    }
+    return null;
+  }
+
   function totalSeconds(phases) {
     return phases.reduce(function (a, p) { return a + p.dur; }, 0);
   }
@@ -234,6 +268,7 @@
     parseField: parseField,
     validate: validate,
     buildPhases: buildPhases,
+    announcement: announcement,
     totalSeconds: totalSeconds,
     formatClock: formatClock
   };

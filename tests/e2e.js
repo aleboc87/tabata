@@ -611,6 +611,43 @@ async function visible(p, sel) { return p.isVisible(sel); }
     await e.ctx.close();
   });
 
+  await check("Voice: exercise names are spoken once ('Next' before a new exercise), not when muted", async () => {
+    const SPEECH_SPY = () => {
+      window.__spoken = [];
+      window.SpeechSynthesisUtterance = function (t) { this.text = t; };
+      Object.defineProperty(window, "speechSynthesis", { configurable: true, value: { speak: (u) => { if (u.text.trim()) window.__spoken.push(u.text + (u.lang ? "@" + u.lang : "")); }, cancel: () => {} } });
+    };
+    const setup = {
+      prep: false, prepDur: 10, work: 3, rest: 2, rounds: 2, loops: 1, between: 60, cool: false, coolDur: 120, type: "interval", every: 60, amrapDur: 600,
+      name1: "Burpees", blocks: [{ type: "interval", name: "Squats", work: "3", rest: "0", rounds: "1", every: "60", dur: "600", gap: "2" }]
+    };
+    const v = await newPage({ width: 390, height: 844 });
+    await v.p.addInitScript(SPEECH_SPY);
+    await v.p.goto(BASE);
+    await v.p.evaluate((c) => { localStorage.clear(); localStorage.setItem("tabatale.settings.v1", JSON.stringify(c)); }, setup);
+    await v.p.reload();
+    await v.p.click("[data-action=go-setup]");
+    await v.p.click("#setup-start");
+    await v.p.waitForSelector("#screen-done:not([hidden])", { timeout: 30000 });
+    eq(JSON.stringify(await v.p.evaluate(() => window.__spoken)), JSON.stringify(["Burpees", "Next@en-US", "Squats"]));
+    // muted: silence
+    await v.p.evaluate(() => { localStorage.setItem("tabatale.muted.v1", "1"); window.__spoken.length = 0; });
+    await v.p.reload();
+    await v.p.click("[data-action=go-setup]");
+    await v.p.click("#setup-start");
+    await v.p.waitForTimeout(2500);
+    eq(await v.p.evaluate(() => window.__spoken.length), 0, "nothing spoken while muted");
+    // no voice on the phone: the workout still runs
+    const w = await newPage({ width: 390, height: 844 });
+    await w.p.addInitScript(() => { Object.defineProperty(window, "speechSynthesis", { value: undefined }); });
+    await w.p.goto(BASE);
+    await w.p.evaluate((c) => { localStorage.clear(); localStorage.setItem("tabatale.settings.v1", JSON.stringify(c)); }, setup);
+    await w.p.reload();
+    await w.p.click("[data-action=go-setup]"); await w.p.click("#setup-start");
+    ok(await visible(w.p, "#screen-run"), "runs without a voice");
+    await v.ctx.close(); await w.ctx.close();
+  });
+
   await check("Offline: app reopens without network (service worker)", async () => {
     await p.evaluate(() => navigator.serviceWorker.ready);
     await p.waitForTimeout(500);

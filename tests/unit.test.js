@@ -523,3 +523,21 @@ test("share: damaged, foreign or unsafe links are refused, never half-loaded", (
   assert.equal(got.cfg.blocks[0].work, "20", "non-numeric value replaced by the default");
   assert.equal(Plan.validate(got.cfg).ok, true);
 });
+
+// ---------------------------------------------------------------- voice: exercise names
+test("voice: names are spoken once per exercise, 'Next' during Get ready / rest, never for every round", () => {
+  const ph = phasesOf({ prep: true, rounds: "2", name1: "Burpees", blocks: [BLK({ name: "Squats", rounds: "2", gap: "10" }), BLK({ name: "Rows", rounds: "1", rest: "0", gap: "0" })] });
+  const say = ph.map((p, i) => Plan.announcement(ph, i)).map((a, i) => a ? ph[i].type + ph[i].block + ":" + (a.next ? "Next " : "") + a.text : null).filter(Boolean);
+  assert.deepEqual(say, ["prep1:Next Burpees", "between2:Next Squats", "rest2:Next Rows"]);
+});
+
+test("voice: nothing without names; a name is said at the start when no rest comes before it", () => {
+  const plain = phasesOf({});
+  assert.ok(plain.every((p, i) => Plan.announcement(plain, i) === null));
+  const emom = phasesOf({ prep: false, type: "emom", every: "30", rounds: "3", name1: "Swings", blocks: [BLK({ type: "amrap", name: "Burpees", dur: "60", gap: "0" })] });
+  const a = emom.map((p, i) => Plan.announcement(emom, i));
+  assert.deepEqual(a[0], { text: "Swings", next: false });
+  assert.equal(a[1], null); assert.equal(a[2], null);
+  assert.deepEqual(a[3], { text: "Burpees", next: false }, "block change with no rest between");
+  assert.equal(Plan.announcement(emom, 99), null);
+});
