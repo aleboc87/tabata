@@ -759,13 +759,13 @@
     }
     copyOrShow(url);
   }
-  /** A link with a shared workout was opened: fill in the setup (nothing starts by itself). */
-  function handleSharedHash() {
-    if (!Share.hasShared(location.hash)) return;
-    var shared = Share.decode(Plan, location.hash);
-    try { history.replaceState(history.state, "", location.pathname + location.search); } catch (e) { /* ignore */ }
-    if (Nav.current() === "run" || !$("picker").hidden) return;
-    if (!shared) { toast("This link does not contain a valid workout.", 5000); return; }
+  var sharedCode = "";   // the code of the workout that was just opened from a link
+  function isInstalledApp() {
+    try { return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true; }
+    catch (e) { return false; }
+  }
+  /** Fills in the setup with a shared workout (nothing starts by itself). */
+  function openShared(shared) {
     Object.assign(cfg, shared.cfg);
     loadedId = null;
     presetName = shared.name;
@@ -773,6 +773,41 @@
     refreshSetup();
     Nav.show("setup");
     toast("Shared workout loaded" + (shared.name ? ": " + shared.name : "") + ". Press Save to keep it.", 6000);
+  }
+  /** A link with a shared workout was opened. */
+  function handleSharedHash() {
+    if (!Share.hasShared(location.hash)) return;
+    var shared = Share.decode(Plan, location.hash);
+    var code = Share.tokenOf(location.hash);
+    try { history.replaceState(history.state, "", location.pathname + location.search); } catch (e) { /* ignore */ }
+    if (Nav.current() === "run" || !$("picker").hidden) return;
+    if (!shared) { toast("This link does not contain a valid workout.", 5000); return; }
+    openShared(shared);
+    // a link opens in the browser, which on an iPhone does not share data with the app on the Home screen
+    sharedCode = code;
+    setHidden($("share-banner"), isInstalledApp());
+  }
+
+  // ---------------------------------------------------------------- import (paste a link or code)
+  function importDialogOpen() { return !$("import-dialog").hidden; }
+  function importMsg(text) {
+    var m = $("import-msg");
+    m.textContent = text || "";
+    m.classList.toggle("is-bad", !!text);
+  }
+  function openImport() {
+    $("import-input").value = "";
+    importMsg("");
+    setHidden($("import-paste"), !(navigator.clipboard && navigator.clipboard.readText));
+    $("import-dialog").hidden = false;
+    $("import-input").focus();
+  }
+  function closeImport() { $("import-dialog").hidden = true; }
+  function doImport() {
+    var shared = Share.parseInput(Plan, $("import-input").value);
+    if (!shared) { importMsg("This is not a valid workout link or code."); return; }
+    closeImport();
+    openShared(shared);
   }
 
   // ---------------------------------------------------------------- history
@@ -973,6 +1008,7 @@
   // ---------------------------------------------------------------- back (arrow, X or system back)
   function handleBack(screen) {
     if (TimePicker.isOpen()) { TimePicker.close(); return; }
+    if (importDialogOpen()) { closeImport(); return; }
     if (!$("share-dialog").hidden) { closeShareDialog(); return; }
     if (nameDialogOpen()) { closeNameDialog(); return; }
     if (confirmKind) { confirmNo(); return; }
@@ -1019,6 +1055,18 @@
       else { try { if (document.execCommand("copy")) done(); } catch (e) { /* select it by hand */ } }
     },
     "share-close": function () { closeShareDialog(); },
+    "open-import": openImport,
+    "import-cancel": closeImport,
+    "import-ok": doImport,
+    "import-paste": function () {
+      navigator.clipboard.readText().then(function (t) { $("import-input").value = t; importMsg(""); }, function () { importMsg("Paste with a long press in the box."); });
+    },
+    "copy-code": function () {
+      if (!sharedCode) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(sharedCode).then(function () { toast("Code copied"); }, function () { showShareDialog(Share.makeUrl(location.href, sharedCode)); });
+      else showShareDialog(Share.makeUrl(location.href, sharedCode));
+    },
+    "close-banner": function () { setHidden($("share-banner"), true); },
     "amrap-plus": function () {
       var ph = amrapPhase();
       if (!ph || runner.paused) return;
@@ -1125,6 +1173,7 @@
   Nav.onChange(function (screen) {
     var inRun = screen === "run";
     document.body.classList.toggle("in-run", inRun);
+    if (screen !== "setup") setHidden($("share-banner"), true);
     if (!inRun) {
       document.body.classList.remove("phase-prep", "phase-work", "phase-rest", "phase-between", "phase-cool");
       var meta = document.querySelector('meta[name="theme-color"]');

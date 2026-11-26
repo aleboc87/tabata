@@ -541,3 +541,18 @@ test("voice: nothing without names; a name is said at the start when no rest com
   assert.deepEqual(a[3], { text: "Burpees", next: false }, "block change with no rest between");
   assert.equal(Plan.announcement(emom, 99), null);
 });
+
+test("import: the code, the whole link or a chat message with the link all work; anything else is refused", () => {
+  const c = cfg({ work: "45", rounds: "5" });
+  const token = Share.encode(Plan, "Legs", c);
+  const url = Share.makeUrl("https://aleboc87.github.io/tabata/", token);
+  const want = Plan.normalizeCfg(c);
+  for (const text of [token, "  " + token + "\n", url, "TabatAle: Legs\n" + url + "\nenjoy!", "Look: " + url + " (it is good)"]) {
+    const got = Share.parseInput(Plan, text);
+    assert.ok(got, text.slice(0, 30));
+    assert.deepEqual(got.cfg, want); assert.equal(got.name, "Legs");
+  }
+  for (const bad of ["", "   ", "hello world", "https://example.com/", "#w=", "abc", token.slice(0, 20), null, undefined, "x".repeat(30000)]) assert.equal(Share.parseInput(Plan, bad), null, String(bad).slice(0, 20));
+  assert.equal(Share.tokenOf("#w=" + token), token);
+  assert.equal(Share.tokenOf("#other"), "");
+});

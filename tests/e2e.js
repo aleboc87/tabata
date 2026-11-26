@@ -648,6 +648,60 @@ async function visible(p, sel) { return p.isVisible(sel); }
     await v.ctx.close(); await w.ctx.close();
   });
 
+  await check("Import: link opened in a browser offers the code; the installed app imports a pasted link, message or code", async () => {
+    const perms = { permissions: ["clipboard-read", "clipboard-write"] };
+    const a = await newPage({ width: 390, height: 844 }, perms);
+    await a.p.goto(BASE); await a.p.evaluate(() => localStorage.clear()); await a.p.reload();
+    await a.p.click("[data-action=go-setup]");
+    await setTime(a.p, "work", 33); await setCount(a.p, "rounds", 7);
+    await a.p.click("[data-action=share-setup]");
+    await a.p.waitForSelector("#toast:not([hidden])");
+    const link = await a.p.evaluate(() => navigator.clipboard.readText());
+    // somebody opens the link in a browser (not the installed app)
+    const b = await newPage({ width: 390, height: 844 }, perms);
+    await b.p.goto(link);
+    ok(await visible(b.p, "#share-banner"), "banner with the code");
+    await b.p.click("[data-action=copy-code]");
+    const code = await b.p.evaluate(() => navigator.clipboard.readText());
+    ok(link.endsWith("#w=" + code), "the code is the part after #w=");
+    await b.p.click("[data-action=close-banner]");
+    ok(!(await visible(b.p, "#share-banner")));
+    // the installed app: it has its own, separate storage
+    const c = await newPage({ width: 390, height: 844 }, perms);
+    await c.p.goto(BASE); await c.p.evaluate(() => localStorage.clear()); await c.p.reload();
+    await c.p.click("[data-action=go-saved]"); await c.p.click("[data-action=open-import]");
+    ok(await visible(c.p, "#import-dialog"));
+    await c.p.fill("#import-input", "hello there");
+    await c.p.click("#import-ok");
+    ok((await c.p.textContent("#import-msg")).startsWith("This is not a valid workout"), "bad text refused");
+    ok(await visible(c.p, "#import-dialog"), "dialog stays open");
+    await c.p.fill("#import-input", "Check this out!\n" + link + "\nenjoy");
+    await c.p.click("#import-ok");
+    ok(await visible(c.p, "#screen-setup"), "setup opens");
+    eq(await c.p.inputValue("#f-rounds"), "7");
+    eq((await c.p.textContent("#f-work")).trim(), "0:33");
+    ok(!(await visible(c.p, "#share-banner")), "no banner when importing");
+    // code alone, and the Paste button
+    await c.p.click("[data-action=back] >> visible=true");
+    await c.p.click("[data-action=go-saved]"); await c.p.click("[data-action=open-import]");
+    await c.p.evaluate((t) => navigator.clipboard.writeText(t), code);
+    await c.p.click("#import-paste");
+    await c.p.waitForFunction((t) => document.getElementById("import-input").value === t, code, { timeout: 3000 });
+    await c.p.click("#import-ok");
+    eq(await c.p.inputValue("#f-rounds"), "7");
+    // system back closes the dialog
+    await c.p.click("[data-action=back] >> visible=true");
+    await c.p.click("[data-action=go-saved]"); await c.p.click("[data-action=open-import]");
+    await c.p.goBack();
+    ok(!(await visible(c.p, "#import-dialog")) && await visible(c.p, "#screen-saved"), "back closes the dialog only");
+    // inside the installed app (standalone) the link needs no banner
+    const d = await newPage({ width: 390, height: 844 });
+    await d.p.addInitScript(() => { const o = window.matchMedia.bind(window); window.matchMedia = (q) => (String(q).includes("standalone") ? { matches: true, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} } : o(q)); });
+    await d.p.goto(link);
+    ok(await visible(d.p, "#screen-setup") && !(await visible(d.p, "#share-banner")), "no banner inside the installed app");
+    for (const x of [a, b, c, d]) await x.ctx.close();
+  });
+
   await check("Offline: app reopens without network (service worker)", async () => {
     await p.evaluate(() => navigator.serviceWorker.ready);
     await p.waitForTimeout(500);

@@ -50,10 +50,28 @@
     } catch (e) { return null; }
   }
 
+  /**
+   * Reads what a person pastes: the whole link, a chat message that contains the link, or just the code.
+   * Returns { name, cfg } or null.
+   */
+  function parseInput(Plan, text) {
+    var t = String(text == null ? "" : text).trim();
+    if (!t || t.length > 20000) return null;
+    var m = /#w=([A-Za-z0-9_-]+)/.exec(t);
+    var token = m ? m[1] : (/^[A-Za-z0-9_-]+$/.test(t) ? t : null);
+    return token ? decode(Plan, "#" + PARAM + token) : null;
+  }
+
+  /** The code of a workout (the part after "#w="), for copying by hand. */
+  function tokenOf(hash) {
+    var h = String(hash || "").replace(/^#/, "");
+    return h.indexOf(PARAM) === 0 ? h.slice(PARAM.length) : "";
+  }
+
   /** True when the address carries a shared workout (even a broken one). */
   function hasShared(hash) { return String(hash || "").replace(/^#/, "").indexOf(PARAM) === 0; }
 
-  var api = { encode: encode, decode: decode, makeUrl: makeUrl, hasShared: hasShared };
+  var api = { encode: encode, decode: decode, makeUrl: makeUrl, hasShared: hasShared, parseInput: parseInput, tokenOf: tokenOf };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.Share = api;
 })(this);

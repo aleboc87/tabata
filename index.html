@@ -57,7 +57,7 @@
         <span id="home-streak" class="saved-count num">0 days</span>
       </button>
     </div>
-    <p class="home-foot num" id="app-version">v1.8.0</p>
+    <p class="home-foot num" id="app-version">v1.8.1</p>
   </section>
 
   <!-- ============ STOPWATCH ============ -->
@@ -94,6 +94,13 @@
       <h1 id="setup-title" class="title">Set up Tabata</h1>
       <button type="button" class="icon-btn" aria-label="Share this workout" data-action="share-setup"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M8 7l4-4 4 4M5 12v7h14v-7"/></svg></button>
     </div>
+    <div id="share-banner" class="share-banner" hidden>
+      <p>Using the app from your Home screen? Copy the code, open the app and paste it in <b>Saved workouts › Import</b>.</p>
+      <div class="share-banner-actions">
+        <button type="button" class="link-btn" data-action="copy-code">Copy code</button>
+        <button type="button" class="link-btn is-quiet" data-action="close-banner">Dismiss</button>
+      </div>
+    </div>
     <form id="setup-form" class="setup-body" novalidate>
       <!-- rows are created by app.js from TabataPlan.FIELDS -->
     </form>
@@ -118,6 +125,7 @@
         <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
       <h1 id="saved-title" class="title">Saved workouts</h1>
+      <button type="button" class="link-btn" data-action="open-import">Import</button>
       <span id="saved-count" class="saved-count num">0/10</span>
     </div>
     <div class="search">
@@ -283,6 +291,18 @@
   </div>
 
   <!-- ============ CONFIRM ============ -->
+  <div id="import-dialog" class="overlay" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="import-title">
+      <h2 id="import-title">Import a workout</h2>
+      <p>Paste the link or the code you received. A whole chat message with the link works too.</p>
+      <textarea id="import-input" class="text-in import-input" rows="3" placeholder="Paste here" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Link or code"></textarea>
+      <p id="import-msg" class="name-msg" aria-live="polite"></p>
+      <button type="button" id="import-paste" class="btn-outline" data-action="import-paste">Paste from clipboard</button>
+      <button type="button" id="import-ok" class="btn-primary" data-action="import-ok">Import</button>
+      <button type="button" class="btn-text" data-action="import-cancel">Cancel</button>
+    </div>
+  </div>
+
   <div id="share-dialog" class="overlay" hidden>
     <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="share-title">
       <h2 id="share-title">Share this workout</h2>
