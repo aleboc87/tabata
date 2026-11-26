@@ -2,7 +2,7 @@
 
 Timer gratuito per allenamenti Tabata e cronometro. È una PWA: funziona nel browser, si installa sul telefono e va anche offline.
 
-- Usala: https://aleboc87.github.io/tabatale/
+- Usala: https://aleboc87.github.io/tabata/
 - Codice: HTML, CSS e JavaScript semplici, senza librerie né passaggi di compilazione.
 
 ## Struttura
