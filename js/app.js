@@ -698,9 +698,30 @@
   Nav.show("home");
   Sound.preload();
 
+  var swReg = null, updateReady = false;
+  function reloadIfIdle() {
+    // only on the home screen, so nothing in progress (workout, stopwatch, a name being typed) is lost
+    if (!updateReady || Nav.current() !== "home" || document.querySelector(".overlay:not([hidden])")) return;
+    updateReady = false;
+    location.reload();
+  }
   if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
     window.addEventListener("load", function () {
-      navigator.serviceWorker.register("service-worker.js").catch(function () { /* offline mode not available */ });
+      navigator.serviceWorker.register("service-worker.js").then(function (reg) {
+        swReg = reg;
+      }).catch(function () { /* offline mode not available */ });
+    });
+    // a new version took over: reload to use it as soon as the home screen is showing
+    var hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      if (!hadController) { hadController = true; return; } // first install, nothing to reload
+      updateReady = true;
+      reloadIfIdle();
+    });
+    Nav.onChange(function () { reloadIfIdle(); });
+    // phones keep a home-screen app alive for days: look for a new version each time it comes back
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible" && swReg) { try { swReg.update(); } catch (e) { /* ignore */ } }
     });
   }
 })();

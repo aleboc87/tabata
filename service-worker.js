@@ -2,9 +2,10 @@
  * TabatAle - Offline support
  * On first visit, copies every file of the app to the device. Afterwards the app
  * opens from that copy, also without internet. A new version (new VERSION below)
- * is downloaded in the background and used the next time the app is opened.
+ * is downloaded in the background and takes over at once: the app reloads itself
+ * as soon as no workout or stopwatch is running.
  */
-var VERSION = "tabatale-v1.2.0";
+var VERSION = "tabatale-v1.3.0";
 var FILES = [
   "./",
   "index.html",
@@ -39,6 +40,7 @@ var FILES = [
 self.addEventListener("install", function (event) {
   event.waitUntil(
     caches.open(VERSION).then(function (cache) { return cache.addAll(FILES); })
+      .then(function () { return self.skipWaiting(); })
   );
 });
 
