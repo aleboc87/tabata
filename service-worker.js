@@ -5,7 +5,7 @@
  * is downloaded in the background and takes over at once: the app reloads itself
  * as soon as no workout or stopwatch is running.
  */
-var VERSION = "tabatale-v1.3.1";
+var VERSION = "tabatale-v1.3.2";
 var FILES = [
   "./",
   "index.html",
@@ -39,7 +39,11 @@ var FILES = [
 
 self.addEventListener("install", function (event) {
   event.waitUntil(
-    caches.open(VERSION).then(function (cache) { return cache.addAll(FILES); })
+    caches.open(VERSION).then(function (cache) {
+      // "reload": take every file fresh from the server, never from the browser's short-term
+      // memory, otherwise a new version could be stored with files of the previous one
+      return cache.addAll(FILES.map(function (f) { return new Request(f, { cache: "reload" }); }));
+    })
       .then(function () { return self.skipWaiting(); })
   );
 });
