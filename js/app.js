@@ -23,7 +23,7 @@
   var storage = null;
   try { storage = window.localStorage; } catch (e) { /* storage blocked */ }
   var store = new WorkoutStore(storage);
-  var history = new HistoryStore(storage);
+  var histStore = new HistoryStore(storage);
   var loadedId = null;        // saved workout opened in the setup, if any
   var presetName = "";        // ready-made workout opened in the setup, if any
   var deleteId = null;        // saved workout waiting for delete confirmation
@@ -523,9 +523,9 @@
     runInfo.results = results;
     setText($("done-results"), results.join("  \u00b7  "));
     setHidden($("done-results"), !results.length);
-    history.add(runInfo);
+    histStore.add(runInfo);
     renderStreakCounts();
-    var streak = history.streak();
+    var streak = histStore.streak();
     setText($("done-streak"), streak > 1 ? streak + " days in a row" : "");
     runner = null;
     Nav.show("done");
@@ -639,6 +639,7 @@
   }
 
   var ICON_RENAME = '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg>';
+  var ICON_SHARE = '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M8 7l4-4 4 4M5 12v7h14v-7"/></svg>';
   var ICON_DELETE = '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>';
 
   function renderSaved() {
@@ -651,17 +652,21 @@
       var li = document.createElement("li");
       li.innerHTML =
         '<button type="button" class="saved-open"><span class="saved-name"></span><span class="saved-sum"></span></button>' +
+        '<button type="button" class="icon-btn" data-role="share">' + ICON_SHARE + '</button>' +
         '<button type="button" class="icon-btn" data-role="rename">' + ICON_RENAME + '</button>' +
         '<button type="button" class="icon-btn" data-role="delete">' + ICON_DELETE + '</button>';
       var open = li.querySelector(".saved-open");
+      var shr = li.querySelector('[data-role="share"]');
       var ren = li.querySelector('[data-role="rename"]');
       var del = li.querySelector('[data-role="delete"]');
       li.querySelector(".saved-name").textContent = w.name;
       li.querySelector(".saved-sum").textContent = summaryOf(w.cfg);
       open.setAttribute("aria-label", "Open " + w.name);
+      shr.setAttribute("aria-label", "Share " + w.name);
       ren.setAttribute("aria-label", "Rename " + w.name);
       del.setAttribute("aria-label", "Delete " + w.name);
       open.addEventListener("click", function () { openSaved(w.id); });
+      shr.addEventListener("click", function () { shareWorkout(w.name, w.cfg); });
       ren.addEventListener("click", function () { openNameDialog("rename", w.name, w.id); });
       del.addEventListener("click", function () { deleteId = w.id; openConfirm("delete"); });
       list.appendChild(li);
@@ -709,6 +714,56 @@
     Nav.show("setup");
   }
 
+  // ---------------------------------------------------------------- share by link
+  var toastTimer = 0;
+  function toast(msg, ms) {
+    var t = $("toast");
+    t.textContent = msg;
+    t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.hidden = true; }, ms || 3500);
+  }
+  function closeShareDialog() { $("share-dialog").hidden = true; }
+  function showShareDialog(url) {
+    var input = $("share-url");
+    input.value = url;
+    $("share-dialog").hidden = false;
+    input.focus(); input.select();
+  }
+  function copyOrShow(url) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(function () { toast("Link copied"); }, function () { showShareDialog(url); });
+    } else showShareDialog(url);
+  }
+  /** Opens the phone's share sheet when there is one, otherwise copies the link. */
+  function shareWorkout(name, c) {
+    var url = Share.makeUrl(location.href, Share.encode(Plan, name, c));
+    var title = name ? "TabatAle: " + name : "TabatAle workout";
+    if (navigator.share) {
+      navigator.share({ title: title, text: title, url: url }).catch(function (e) {
+        if (e && e.name === "AbortError") return; // the person closed the share sheet
+        copyOrShow(url);
+      });
+      return;
+    }
+    copyOrShow(url);
+  }
+  /** A link with a shared workout was opened: fill in the setup (nothing starts by itself). */
+  function handleSharedHash() {
+    if (!Share.hasShared(location.hash)) return;
+    var shared = Share.decode(Plan, location.hash);
+    try { history.replaceState(history.state, "", location.pathname + location.search); } catch (e) { /* ignore */ }
+    if (Nav.current() === "run" || !$("picker").hidden) return;
+    if (!shared) { toast("This link does not contain a valid workout.", 5000); return; }
+    Object.assign(cfg, shared.cfg);
+    loadedId = null;
+    presetName = shared.name;
+    Settings.saveSetup(cfg);
+    refreshSetup();
+    Nav.show("setup");
+    toast("Shared workout loaded" + (shared.name ? ": " + shared.name : "") + ". Press Save to keep it.", 6000);
+  }
+
   // ---------------------------------------------------------------- history
   function pad2(n) { return (n < 10 ? "0" : "") + n; }
   function whenText(t) {
@@ -723,15 +778,15 @@
   }
   function streakText(n) { return n + (n === 1 ? " day" : " days"); }
   function renderStreakCounts() {
-    setText($("home-streak"), streakText(history.streak()));
+    setText($("home-streak"), streakText(histStore.streak()));
   }
   function renderHistory() {
-    var n = history.streak();
+    var n = histStore.streak();
     setText($("history-streak"), String(n));
     setText($("history-streak-label"), n === 1 ? "day in a row" : "days in a row");
     var week = $("history-week");
     week.textContent = "";
-    history.week().forEach(function (d) {
+    histStore.week().forEach(function (d) {
       var li = document.createElement("li");
       li.className = (d.done ? "done " : "") + (d.today ? "today" : "");
       li.innerHTML = '<span class="dot"></span><span></span>';
@@ -741,7 +796,7 @@
     });
     var list = $("history-list");
     list.textContent = "";
-    var items = history.list();
+    var items = histStore.list();
     items.forEach(function (e) {
       var li = document.createElement("li");
       li.innerHTML = '<span class="history-main"><span class="saved-name"></span><span class="history-when"></span></span><span class="saved-sum"></span>';
@@ -907,6 +962,7 @@
   // ---------------------------------------------------------------- back (arrow, X or system back)
   function handleBack(screen) {
     if (TimePicker.isOpen()) { TimePicker.close(); return; }
+    if (!$("share-dialog").hidden) { closeShareDialog(); return; }
     if (nameDialogOpen()) { closeNameDialog(); return; }
     if (confirmKind) { confirmNo(); return; }
     var t = now();
@@ -939,6 +995,19 @@
     "go-stopwatch": function () { Nav.show("stopwatch"); },
     "go-setup": function () { refreshSetup(); Nav.show("setup"); },
     "go-home": function () { Nav.show("home"); },
+    "share-setup": function () {
+      if (!Plan.validate(cfg).ok) { toast("Fix the values in red first."); return; }
+      var w = loadedId ? store.get(loadedId) : null;
+      shareWorkout(w ? w.name : presetName, cfg);
+    },
+    "share-copy": function () {
+      var input = $("share-url");
+      input.focus(); input.select();
+      var done = function () { toast("Link copied"); closeShareDialog(); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(input.value).then(done, function () { /* select it by hand */ });
+      else { try { if (document.execCommand("copy")) done(); } catch (e) { /* select it by hand */ } }
+    },
+    "share-close": function () { closeShareDialog(); },
     "amrap-plus": function () {
       var ph = amrapPhase();
       if (!ph || runner.paused) return;
@@ -957,7 +1026,7 @@
     "save-workout": function () {
       if (!Plan.validate(cfg).ok) return;
       var w = loadedId ? store.get(loadedId) : null;
-      openNameDialog("save", w ? w.name : "");
+      openNameDialog("save", w ? w.name : presetName);
     },
     "back": function () { handleBack(Nav.current()); },
     "sw-start": function () { sw.start(now()); },
@@ -1063,6 +1132,8 @@
   renderStreakCounts();
   Nav.init(handleBack);
   Nav.show("home");
+  handleSharedHash();
+  window.addEventListener("hashchange", handleSharedHash);
   Sound.preload();
 
   var swReg = null, updateReady = false;

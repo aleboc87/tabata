@@ -486,3 +486,40 @@ test("blocks of different types in sequence: Interval, then EMOM, then AMRAP", (
   assert.deepEqual(Object.keys(bad.errors).sort(), ["b0.dur", "b1.rounds"]);
   assert.equal(Plan.cleanBlocks([{ type: "weird", work: "5" }])[0].type, "interval");
 });
+
+// ---------------------------------------------------------------- share by link
+const Share = require("../js/share.js");
+
+test("share: a workout survives the trip through the link, with accents and blocks", () => {
+  const c = cfg({ type: "emom", every: "45", rounds: "6", name1: "Swingà è", blocks: [{ type: "amrap", name: "Burpees", dur: "300", gap: "20" }, { type: "interval", name: "", work: "30", rest: "10", rounds: "4", gap: "0" }] });
+  const url = Share.makeUrl("https://aleboc87.github.io/tabata/?x=1#old", Share.encode(Plan, "  Il mio  allenamento è forte ", c));
+  assert.ok(url.startsWith("https://aleboc87.github.io/tabata/?x=1#w="));
+  assert.ok(url.length < 700, "short enough to share: " + url.length);
+  const got = Share.decode(Plan, url.slice(url.indexOf("#")));
+  assert.equal(got.name, "Il mio allenamento è forte");
+  assert.deepEqual(got.cfg, Plan.normalizeCfg(c));
+  assert.equal(Plan.validate(got.cfg).ok, true);
+  assert.equal(Share.hasShared("#w=abc"), true);
+  assert.equal(Share.hasShared("#other"), false);
+});
+
+test("share: damaged, foreign or unsafe links are refused, never half-loaded", () => {
+  const good = Share.encode(Plan, "A", cfg({}));
+  const bad = [
+    "", "#", "#w=", "#w=%%%", "#w=!!!!", "#x=" + good, "#w=" + "A".repeat(3001),
+    "#w=" + Buffer.from("not json").toString("base64"),
+    "#w=" + Buffer.from(JSON.stringify({ v: 2, n: "x", c: cfg({}) })).toString("base64"),
+    "#w=" + Buffer.from(JSON.stringify({ v: 1, n: "x", c: "text" })).toString("base64"),
+    "#w=" + Buffer.from(JSON.stringify({ v: 1, n: "x", c: cfg({ work: "0" }) })).toString("base64"),
+    "#w=" + Buffer.from(JSON.stringify({ v: 1, n: "x", c: cfg({ rounds: "99999" }) })).toString("base64")
+  ];
+  bad.forEach((h) => assert.equal(Share.decode(Plan, h), null, h.slice(0, 30)));
+  // unknown or hostile fields are dropped, long names cut
+  const evil = Buffer.from(JSON.stringify({ v: 1, n: "<img src=x onerror=alert(1)>" + "z".repeat(100), c: Object.assign(cfg({}), { type: "bogus", blocks: [{ type: "x", name: "<b>", work: "<script>", rest: "5", rounds: "2", gap: "1" }], extra: "x" }) })).toString("base64url");
+  const got = Share.decode(Plan, "#w=" + evil);
+  assert.equal(got.name.length <= 30, true);
+  assert.equal(got.cfg.type, "interval");
+  assert.equal("extra" in got.cfg, false);
+  assert.equal(got.cfg.blocks[0].work, "20", "non-numeric value replaced by the default");
+  assert.equal(Plan.validate(got.cfg).ok, true);
+});

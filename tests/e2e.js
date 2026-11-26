@@ -553,6 +553,64 @@ async function visible(p, sel) { return p.isVisible(sel); }
     eq(await p.getAttribute("#type-seg button[data-type=amrap]", "aria-checked"), "true");
   });
 
+  await check("Share by link: copy from the setup and from the saved list; opening a link fills in the setup; bad links are refused", async () => {
+    const perms = { permissions: ["clipboard-read", "clipboard-write"] };
+    const a = await newPage({ width: 390, height: 844 }, perms);
+    await a.p.goto(BASE); await a.p.evaluate(() => localStorage.clear()); await a.p.reload();
+    await a.p.click("[data-action=go-setup]");
+    await setTime(a.p, "work", 45); await setCount(a.p, "rounds", 5);
+    await a.p.click("[data-action=share-setup]");
+    await a.p.waitForSelector("#toast:not([hidden])");
+    eq((await a.p.textContent("#toast")).trim(), "Link copied");
+    const link = await a.p.evaluate(() => navigator.clipboard.readText());
+    ok(link.startsWith(BASE + "#w="), "link: " + link.slice(0, 60));
+    // somebody else opens it
+    const b = await newPage({ width: 390, height: 844 });
+    await b.p.goto(link);
+    ok(await visible(b.p, "#screen-setup"), "setup opens");
+    eq(await b.p.inputValue("#f-rounds"), "5");
+    eq((await b.p.textContent("#f-work")).trim(), "0:45");
+    ok((await b.p.textContent("#toast")).startsWith("Shared workout loaded"));
+    eq(await b.p.evaluate(() => location.hash), "", "the link part is removed from the address");
+    await b.p.goBack();
+    ok(await visible(b.p, "#screen-home"), "back goes home");
+    // a saved workout shared from the list keeps its name, and it is offered when saving
+    await a.p.click("[data-action=save-workout]");
+    await a.p.fill("#name-input", "Legs"); await a.p.click("#name-ok");
+    await a.p.click("[data-action=back] >> visible=true");
+    await a.p.click("[data-action=go-saved]");
+    await a.p.click("[aria-label='Share Legs']");
+    const link2 = await a.p.evaluate(() => navigator.clipboard.readText());
+    const c = await newPage({ width: 390, height: 844 });
+    await c.p.goto(link2);
+    ok((await c.p.textContent("#toast")).startsWith("Shared workout loaded: Legs"));
+    await c.p.click("[data-action=save-workout]");
+    eq(await c.p.inputValue("#name-input"), "Legs");
+    // damaged and foreign links
+    for (const bad of ["#w=AAAA", "#w=!!", "#w=" + "A".repeat(4000)]) {
+      const d = await newPage({ width: 390, height: 844 });
+      await d.p.goto(BASE + bad);
+      ok((await d.p.textContent("#toast")).startsWith("This link does not contain a valid workout"), bad.slice(0, 12));
+      ok(await visible(d.p, "#screen-home"));
+      await d.ctx.close();
+    }
+    await a.ctx.close(); await b.ctx.close(); await c.ctx.close();
+  });
+
+  await check("Share by link: without clipboard access the link is shown to copy by hand", async () => {
+    const e = await newPage({ width: 390, height: 844 });
+    await e.p.goto(BASE);
+    await e.p.addInitScript(() => { Object.defineProperty(navigator, "clipboard", { value: undefined }); });
+    await e.p.reload();
+    await e.p.click("[data-action=go-setup]");
+    await e.p.click("[data-action=share-setup]");
+    ok(await visible(e.p, "#share-dialog"), "dialog");
+    ok((await e.p.inputValue("#share-url")).startsWith(BASE + "#w="));
+    await e.p.goBack();
+    ok(!(await visible(e.p, "#share-dialog")), "system back closes it");
+    await e.ctx.close();
+  });
+
   await check("Offline: app reopens without network (service worker)", async () => {
     await p.evaluate(() => navigator.serviceWorker.ready);
     await p.waitForTimeout(500);
