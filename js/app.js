@@ -751,7 +751,7 @@
     var url = Share.makeUrl(location.href, Share.encode(Plan, name, c));
     var title = name ? "TabatAle: " + name : "TabatAle workout";
     if (navigator.share) {
-      navigator.share({ title: title, text: title, url: url }).catch(function (e) {
+      navigator.share({ title: title, text: title + "\nUsing the app from your Home screen? Open the link, tap Copy code, then Import workout in the app.", url: url }).catch(function (e) {
         if (e && e.name === "AbortError") return; // the person closed the share sheet
         copyOrShow(url);
       });
@@ -803,11 +803,37 @@
     $("import-input").focus();
   }
   function closeImport() { $("import-dialog").hidden = true; }
+  /** Saves a shared workout straight into the saved list (with its own name). */
+  function saveShared(shared) {
+    var base = shared.name || "Shared workout";
+    var name = base, n = 1, r;
+    while (true) {
+      r = store.save(name, shared.cfg);
+      if (r.ok || r.error !== "exists") break;
+      n++; name = base.slice(0, 40) + " (" + n + ")";
+    }
+    if (!r.ok) { openShared(shared); toast("Your saved list is full: press Save after deleting one.", 6000); return; }
+    renderSavedCount();
+    $("saved-search").value = "";
+    renderSaved();
+    Nav.show("saved");
+    toast("Saved: " + r.workout.name, 4500);
+  }
+  /** Home button: reads the copied link or code and saves the workout in one tap. */
+  function quickImport() {
+    var fallback = function () { openImport(); };
+    if (!(navigator.clipboard && navigator.clipboard.readText)) { fallback(); return; }
+    navigator.clipboard.readText().then(function (t) {
+      var shared = Share.parseInput(Plan, t);
+      if (shared) saveShared(shared);
+      else { fallback(); importMsg("No workout found in what you copied. Paste it here."); }
+    }, fallback);
+  }
   function doImport() {
     var shared = Share.parseInput(Plan, $("import-input").value);
     if (!shared) { importMsg("This is not a valid workout link or code."); return; }
     closeImport();
-    openShared(shared);
+    saveShared(shared);
   }
 
   // ---------------------------------------------------------------- history
@@ -1056,6 +1082,7 @@
     },
     "share-close": function () { closeShareDialog(); },
     "open-import": openImport,
+    "quick-import": quickImport,
     "import-cancel": closeImport,
     "import-ok": doImport,
     "import-paste": function () {

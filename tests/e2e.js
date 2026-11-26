@@ -677,18 +677,29 @@ async function visible(p, sel) { return p.isVisible(sel); }
     ok(await visible(c.p, "#import-dialog"), "dialog stays open");
     await c.p.fill("#import-input", "Check this out!\n" + link + "\nenjoy");
     await c.p.click("#import-ok");
-    ok(await visible(c.p, "#screen-setup"), "setup opens");
-    eq(await c.p.inputValue("#f-rounds"), "7");
-    eq((await c.p.textContent("#f-work")).trim(), "0:33");
-    ok(!(await visible(c.p, "#share-banner")), "no banner when importing");
-    // code alone, and the Paste button
+    ok(await visible(c.p, "#screen-saved"), "saved list opens");
+    ok((await c.p.textContent("#toast")).startsWith("Saved: "), "toast says it was saved");
+    eq(await c.p.evaluate(() => JSON.parse(localStorage.getItem("tabatale.workouts.v1") || "[]").length), 1);
+    // home: one tap reads the clipboard and saves (a second copy gets a numbered name)
     await c.p.click("[data-action=back] >> visible=true");
+    await c.p.evaluate((t) => navigator.clipboard.writeText(t), code);
+    await c.p.click("[data-action=quick-import]");
+    await c.p.waitForSelector("#screen-saved:not([hidden])");
+    ok(/\(2\)/.test(await c.p.textContent("#saved-list")) || (await c.p.evaluate(() => JSON.parse(localStorage.getItem("tabatale.workouts.v1")).length)) === 2, "second workout saved");
+    // nothing useful in the clipboard: the paste dialog opens with a hint
+    await c.p.click("[data-action=back] >> visible=true");
+    await c.p.evaluate(() => navigator.clipboard.writeText("nothing here"));
+    await c.p.click("[data-action=quick-import]");
+    await c.p.waitForSelector("#import-dialog:not([hidden])");
+    ok((await c.p.textContent("#import-msg")).startsWith("No workout found"), "hint shown");
+    await c.p.click("[data-action=import-cancel]");
+    // the Paste button inside the dialog
     await c.p.click("[data-action=go-saved]"); await c.p.click("[data-action=open-import]");
     await c.p.evaluate((t) => navigator.clipboard.writeText(t), code);
     await c.p.click("#import-paste");
     await c.p.waitForFunction((t) => document.getElementById("import-input").value === t, code, { timeout: 3000 });
     await c.p.click("#import-ok");
-    eq(await c.p.inputValue("#f-rounds"), "7");
+    ok(await visible(c.p, "#screen-saved"));
     // system back closes the dialog
     await c.p.click("[data-action=back] >> visible=true");
     await c.p.click("[data-action=go-saved]"); await c.p.click("[data-action=open-import]");
