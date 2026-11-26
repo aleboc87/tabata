@@ -43,14 +43,18 @@
   function plural(n, word) { return n + " " + word + (n === 1 ? "" : "s"); }
   /** "8 rounds × 1 loop", or "3 blocks · 20 rounds" when the workout has several blocks. */
   function shapeText(s) {
+    if (s.blocks <= 1 && s.kind === "emom") return "EMOM \u00b7 " + plural(s.rounds, "round");
+    if (s.blocks <= 1 && s.kind === "amrap") return "AMRAP";
     if (s.blocks > 1) return plural(s.blocks, "block") + " \u00b7 " + plural(s.totalRounds, "round");
     return plural(s.rounds, "round") + " \u00d7 " + plural(s.loops, "loop");
   }
   function shapeOfValues(v) {
     var extra = v.extra || [];
+    var roundsOf = function (b, loops) { return b.type === "amrap" ? 0 : b.rounds * loops; };
     return {
       rounds: v.rounds, loops: v.loops, blocks: extra.length + 1,
-      totalRounds: extra.reduce(function (a, b) { return a + b.rounds; }, v.rounds * v.loops)
+      kind: !extra.length && v.type !== "interval" ? v.type : "",
+      totalRounds: extra.reduce(function (a, b) { return a + roundsOf(b, 1); }, roundsOf({ type: v.type, rounds: v.rounds }, v.loops))
     };
   }
 
@@ -85,11 +89,16 @@
   // ---------------------------------------------------------------- setup screen
   var SECTIONS = [
     { title: "Start", toggle: { key: "prep", label: "Get ready", on: "Countdown before the first round", off: "Off: work starts right away" }, fields: ["prepDur"] },
+    { title: "Timing", fields: ["every", "amrapDur"] },
     { title: "Rounds", fields: ["work", "rest", "rounds"] },
     { title: "Loops", fields: ["loops", "between"] },
     { title: "Finish", toggle: { key: "cool", label: "Cool down", on: "Easy final phase", off: "Off" }, fields: ["coolDur"] }
   ];
-  var rows = {};     // field key -> { row, input, dec, inc, hint }
+  var rows = {};     // field key -> { row, input, dec, inc, hint, label }
+  var secEls = [];   // { el, fields } so a section with no visible field can be hidden
+  // which kind of block each main field belongs to ("rounds" is shared by Interval and EMOM)
+  var FIELD_TYPES = { work: ["interval"], rest: ["interval"], rounds: ["interval", "emom"], loops: ["interval"], between: ["interval"], every: ["emom"], amrapDur: ["amrap"] };
+  var TYPE_NAMES = { interval: "Interval", emom: "EMOM", amrap: "AMRAP" };
   var toggles = {};  // key -> { btn, hint, def }
 
   function buildSetup() {
@@ -97,6 +106,7 @@
     SECTIONS.forEach(function (sec) {
       var section = document.createElement("section");
       section.className = "setup-section";
+      secEls.push({ el: section, fields: sec.fields, toggle: !!sec.toggle });
       var h = document.createElement("h2");
       h.textContent = sec.title;
       section.appendChild(h);
@@ -173,7 +183,7 @@
         }
         dec.addEventListener("click", function () { step(-1); });
         inc.addEventListener("click", function () { step(1); });
-        rows[key] = { row: row, input: input, dec: dec, inc: inc, hint: row.querySelector(".row-hint") };
+        rows[key] = { row: row, input: input, dec: dec, inc: inc, hint: row.querySelector(".row-hint"), label: row.querySelector("label") };
         section.appendChild(row);
       });
       form.appendChild(section);
@@ -184,7 +194,33 @@
 
   // ---------------------------------------------------------------- extra blocks and exercise names
   var ICON_X = '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
-  var blocksBox = null, name1Row = null, name1Input = null, addBtn = null;
+  var blocksBox = null, name1Row = null, name1Input = null, addBtn = null, typeSeg = null;
+
+  /** Interval / EMOM / AMRAP picker (one row of buttons). */
+  function makeTypeSeg(label, onPick) {
+    var wrap = document.createElement("div");
+    wrap.className = "type-seg";
+    wrap.setAttribute("role", "radiogroup");
+    wrap.setAttribute("aria-label", label);
+    Plan.TYPES.forEach(function (t) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("role", "radio");
+      b.dataset.type = t;
+      b.textContent = TYPE_NAMES[t];
+      b.addEventListener("click", function () { onPick(t); });
+      wrap.appendChild(b);
+    });
+    return wrap;
+  }
+  function refreshTypeSeg(el, type) {
+    if (!el) return;
+    Array.prototype.forEach.call(el.querySelectorAll("button"), function (b) {
+      var on = b.dataset.type === type;
+      b.setAttribute("aria-checked", on ? "true" : "false");
+      b.classList.toggle("is-on", on);
+    });
+  }
   var blockRefs = [];     // per extra block: { name, rows: { key: {row,input,dec,inc,hint} } }
   var blocksBuilt = -1;   // how many extra blocks the screen shows now
 
@@ -197,10 +233,13 @@
     name1Row = document.createElement("div");
     name1Row.className = "row name-row";
     name1Row.hidden = true;
-    name1Row.innerHTML = '<span class="row-text"><label class="row-label" for="f-name1">Block 1 · exercise</label></span>' + nameInputHTML("f-name1");
+    name1Row.innerHTML = '<span class="row-text"><label class="row-label" for="f-name1">Exercise</label></span>' + nameInputHTML("f-name1");
     name1Input = name1Row.querySelector("input");
     name1Input.addEventListener("input", function () { cfg.name1 = name1Input.value; saveAndRefresh(); });
+    typeSeg = makeTypeSeg("Workout type", function (t) { cfg.type = t; saveAndRefresh(); });
+    typeSeg.id = "type-seg";
     form.insertBefore(name1Row, form.firstChild);
+    form.insertBefore(typeSeg, form.firstChild);
 
     blocksBox = document.createElement("div");
     blocksBox.id = "blocks";
@@ -294,8 +333,10 @@
       card.querySelector("label").textContent = "Exercise";
       card.querySelector("label").setAttribute("for", "b" + i + "-name");
       nameInput.addEventListener("input", function () { cfg.blocks[i].name = nameInput.value; saveAndRefresh(); });
-      var refs = { name: nameInput, rows: {} };
-      ["gap", "work", "rest", "rounds"].forEach(function (key) {
+      var seg = makeTypeSeg("Type of block " + (i + 2), function (t) { cfg.blocks[i].type = t; saveAndRefresh(); });
+      card.insertBefore(seg, card.children[1]);
+      var refs = { name: nameInput, seg: seg, rows: {} };
+      ["gap", "work", "rest", "every", "dur", "rounds"].forEach(function (key) {
         refs.rows[key] = blockRow(i, key);
         card.appendChild(refs.rows[key].row);
       });
@@ -314,14 +355,19 @@
   /** Shows the current values in the block fields and marks the wrong ones. */
   function refreshBlocks(check) {
     if (blocksBuilt !== cfg.blocks.length) renderBlocks();
-    setHidden(name1Row, cfg.blocks.length === 0);
+    setHidden(name1Row, cfg.blocks.length === 0 && Plan.cleanType(cfg.type) === "interval");
+    setText(name1Row.querySelector("label"), cfg.blocks.length ? "Block 1 \u00b7 exercise" : "Exercise");
     if (document.activeElement !== name1Input && name1Input.value !== (cfg.name1 || "")) name1Input.value = cfg.name1 || "";
     setHidden(addBtn, cfg.blocks.length >= Plan.MAX_BLOCKS - 1);
     cfg.blocks.forEach(function (b, i) {
       var refs = blockRefs[i];
       if (document.activeElement !== refs.name && refs.name.value !== (b.name || "")) refs.name.value = b.name || "";
+      var btype = Plan.cleanType(b.type);
+      refreshTypeSeg(refs.seg, btype);
       Object.keys(refs.rows).forEach(function (key) {
         var r = refs.rows[key], f = Plan.BLOCK_FIELDS[key];
+        setHidden(r.row, key !== "gap" && Plan.BLOCK_KEYS[btype].indexOf(key) < 0);
+        setText(r.row.querySelector("label"), key === "rounds" ? (btype === "emom" ? "Rounds" : f.label) : f.label);
         var bad = !!check.errors["b" + i + "." + key];
         if (f.seconds) {
           var secs = Plan.parseField(key, b[key], Plan.BLOCK_FIELDS);
@@ -356,10 +402,20 @@
     setHidden(rows.prepDur.row, !cfg.prep);
     setHidden(rows.coolDur.row, !cfg.cool);
     var loops = Plan.parseField("loops", cfg.loops);
+    var type = Plan.cleanType(cfg.type);
+    Object.keys(rows).forEach(function (key) {
+      if (FIELD_TYPES[key]) setHidden(rows[key].row, FIELD_TYPES[key].indexOf(type) < 0);
+    });
+    setText(rows.rounds.label, type === "emom" ? "Rounds" : Plan.FIELDS.rounds.label);
+    secEls.forEach(function (sec) {
+      if (sec.toggle) return;
+      setHidden(sec.el, sec.fields.every(function (k) { return rows[k].row.hidden; }));
+    });
+    refreshTypeSeg(typeSeg, type);
     Object.keys(rows).forEach(function (key) {
       var r = rows[key], f = Plan.FIELDS[key];
       var off = key === "between" && !(loops > 1);
-      var bad = !off && !!check.errors[key];
+      var bad = !off && !!check.errors[key] && !(FIELD_TYPES[key] && FIELD_TYPES[key].indexOf(type) < 0);
       if (f.seconds) {
         var secs = Plan.parseField(key, cfg[key]);
         setText(r.input, secs === null ? "?" : Plan.formatClock(secs));
@@ -443,10 +499,14 @@
     var shape = shapeOfValues(check.values);
     runInfo = {
       rounds: check.values.rounds, loops: check.values.loops, total: Plan.totalSeconds(phases),
-      blocks: shape.blocks, totalRounds: shape.totalRounds,
+      blocks: shape.blocks, totalRounds: shape.totalRounds, kind: shape.kind,
+      amrap: {}, amrapNames: {},
       sections: check.values.loops + (check.values.extra || []).length, // loops of block 1 + one per extra block
       name: w ? w.name : presetName
     };
+    phases.forEach(function (p) {
+      if (p.kind === "amrap") { runInfo.amrap[p.block] = 0; runInfo.amrapNames[p.block] = p.name || ""; }
+    });
     lastJumps = -1;
     bar.reset();
     runner.start(now());
@@ -459,12 +519,28 @@
     Sound.playNow("done");
     setText($("done-total"), Plan.formatClock(runInfo.total));
     setText($("done-summary"), shapeText(runInfo));
+    var results = amrapResults();
+    runInfo.results = results;
+    setText($("done-results"), results.join("  \u00b7  "));
+    setHidden($("done-results"), !results.length);
     history.add(runInfo);
     renderStreakCounts();
     var streak = history.streak();
     setText($("done-streak"), streak > 1 ? streak + " days in a row" : "");
     runner = null;
     Nav.show("done");
+  }
+
+  /** "Burpees: 7 rounds" for every AMRAP block of the workout that just ended. */
+  function amrapResults() {
+    return Object.keys(runInfo.amrap).map(function (b) {
+      return (runInfo.amrapNames[b] || "AMRAP") + ": " + plural(runInfo.amrap[b], "round");
+    });
+  }
+
+  function amrapPhase() {
+    var ph = runner && runner.phases[runner.idx];
+    return ph && ph.kind === "amrap" ? ph : null;
   }
 
   function stopRun() {
@@ -510,8 +586,12 @@
     setText(secsEl, String(secs));
     secsEl.classList.toggle("is-long", secs >= 100);
     var rr = ph.rounds || runInfo.rounds;
-    setText($("run-round"), ph.type === "prep" ? "Round – / " + rr : "Round " + ph.round + " / " + rr);
-    setText($("run-loop"), runInfo.blocks > 1 ? "Block " + (ph.block || 1) + "/" + runInfo.blocks : "Loop " + ph.loop + "/" + runInfo.loops);
+    var isAmrap = ph.kind === "amrap";
+    setHidden($("amrap-box"), !isAmrap);
+    if (isAmrap) setText($("run-round"), "Rounds: " + (runInfo.amrap[ph.block] || 0));
+    else if (ph.kind === "emom") setText($("run-round"), ph.unit + " " + ph.round + " / " + rr);
+    else setText($("run-round"), ph.type === "prep" ? "Round – / " + rr : "Round " + ph.round + " / " + rr);
+    setText($("run-loop"), runInfo.blocks > 1 ? "Block " + (ph.block || 1) + "/" + runInfo.blocks : (runInfo.kind ? TYPE_NAMES[runInfo.kind] : "Loop " + ph.loop + "/" + runInfo.loops));
     setText($("run-next"), next ? (next.label || Plan.PHASE_LABELS[next.type]) + (next.name ? " · " + next.name : "") + " · " + next.dur + " s" : "Finish");
     setText($("run-left"), Plan.formatClock(Math.ceil(runner.remainingTotalMs(t) / 1000)));
 
@@ -667,7 +747,13 @@
       li.innerHTML = '<span class="history-main"><span class="saved-name"></span><span class="history-when"></span></span><span class="saved-sum"></span>';
       li.querySelector(".saved-name").textContent = e.name || "Custom workout";
       li.querySelector(".history-when").textContent = whenText(e.t);
-      li.querySelector(".saved-sum").textContent = Plan.formatClock(e.total) + " · " + shapeText({ rounds: e.rounds, loops: e.loops, blocks: e.blocks || 1, totalRounds: e.totalRounds });
+      li.querySelector(".saved-sum").textContent = Plan.formatClock(e.total) + " · " + shapeText({ rounds: e.rounds, loops: e.loops, blocks: e.blocks || 1, totalRounds: e.totalRounds, kind: e.kind });
+      if (e.results && e.results.length) {
+        var res = document.createElement("span");
+        res.className = "history-res";
+        res.textContent = e.results.join(" \u00b7 ");
+        li.querySelector(".history-main").appendChild(res);
+      }
       list.appendChild(li);
     });
     setHidden($("history-empty"), items.length > 0);
@@ -853,6 +939,19 @@
     "go-stopwatch": function () { Nav.show("stopwatch"); },
     "go-setup": function () { refreshSetup(); Nav.show("setup"); },
     "go-home": function () { Nav.show("home"); },
+    "amrap-plus": function () {
+      var ph = amrapPhase();
+      if (!ph || runner.paused) return;
+      runInfo.amrap[ph.block] = (runInfo.amrap[ph.block] || 0) + 1;
+      try { if (navigator.vibrate) navigator.vibrate(25); } catch (e) { /* not supported */ }
+      tick();
+    },
+    "amrap-minus": function () {
+      var ph = amrapPhase();
+      if (!ph || runner.paused) return;
+      runInfo.amrap[ph.block] = Math.max(0, (runInfo.amrap[ph.block] || 0) - 1);
+      tick();
+    },
     "go-history": function () { renderHistory(); Nav.show("history"); },
     "go-saved": function () { $("saved-search").value = ""; renderSaved(); Nav.show("saved"); },
     "save-workout": function () {

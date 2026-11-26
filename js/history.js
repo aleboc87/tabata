@@ -21,6 +21,12 @@
     return d;
   }
 
+  /** Results of AMRAP blocks, e.g. ["Burpees: 7 rounds"]: short plain texts only. */
+  function cleanResults(list) {
+    if (!Array.isArray(list)) return [];
+    return list.filter(function (r) { return typeof r === "string"; }).slice(0, 10).map(function (r) { return r.slice(0, 60); });
+  }
+
   function HistoryStore(storage, clock) {
     this.storage = storage;
     this.clock = clock || function () { return Date.now(); };
@@ -50,7 +56,7 @@
   /** Records a completed workout: { name, total (seconds), rounds, loops }. */
   HistoryStore.prototype.add = function (info) {
     var t = this.clock();
-    this.entries.unshift({ t: t, name: info.name || "", total: info.total, rounds: info.rounds, loops: info.loops, blocks: info.blocks || 1, totalRounds: info.totalRounds || info.rounds * info.loops });
+    this.entries.unshift({ t: t, name: info.name || "", total: info.total, rounds: info.rounds, loops: info.loops, blocks: info.blocks || 1, totalRounds: info.totalRounds || info.rounds * info.loops, kind: info.kind || "", results: cleanResults(info.results) });
     this.entries = this.entries.slice(0, MAX_ENTRIES);
     var key = dayKey(new Date(t));
     if (this.days.indexOf(key) < 0) {

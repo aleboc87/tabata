@@ -23,6 +23,7 @@
       cfg[k] = typeof defaults[k] === "boolean" ? defaults[k] : String(defaults[k]);
     });
     var keys = Object.keys(cfg);
+    cfg.type = "interval";
     cfg.name1 = "";
     cfg.blocks = [];
     var raw = read(KEY);
@@ -36,6 +37,7 @@
       });
       // exercise names and extra blocks (added in 1.5.0; older data has none)
       var Plan = root.TabataPlan;
+      cfg.type = Plan ? Plan.cleanType(saved.type) : "interval";
       cfg.name1 = Plan ? Plan.cleanName(saved.name1) : "";
       cfg.blocks = Plan ? Plan.cleanBlocks(saved.blocks) : [];
     } catch (e) { /* damaged data: use the defaults */ }

@@ -7,7 +7,7 @@
   "use strict";
 
   function make(name, over) {
-    var base = { prep: true, prepDur: 10, work: 20, rest: 10, rounds: 8, loops: 1, between: 60, cool: false, coolDur: 120 };
+    var base = { prep: true, prepDur: 10, work: 20, rest: 10, rounds: 8, loops: 1, between: 60, cool: false, coolDur: 120, type: "interval", every: 60, amrapDur: 600 };
     Object.keys(over).forEach(function (k) { base[k] = over[k]; });
     return { id: "preset-" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-"), name: name, cfg: base };
   }
@@ -18,6 +18,8 @@
     make("HIIT 30/30", { work: 30, rest: 30, rounds: 10 }),
     make("Endurance", { work: 40, rest: 20, rounds: 8 }),
     make("Core blast", { work: 45, rest: 15, rounds: 6, cool: true, coolDur: 60 }),
+    make("EMOM 10", { type: "emom", every: 60, rounds: 10 }),
+    make("AMRAP 12", { type: "amrap", amrapDur: 720 }),
     make("Circuit", {
       work: 40, rest: 20, rounds: 4, name1: "Squats",
       blocks: [

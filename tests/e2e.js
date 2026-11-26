@@ -350,7 +350,7 @@ async function visible(p, sel) { return p.isVisible(sel); }
   await check("Ready-made: list, open as a copy, search, not counted in the 10", async () => {
     await p.evaluate(() => localStorage.clear()); await p.reload();
     await p.click("[data-action=go-saved]");
-    eq(await p.locator("#preset-list li").count(), 6);
+    eq(await p.locator("#preset-list li").count(), 8);
     eq(await p.textContent("#preset-list li:nth-child(1) .saved-name"), "Classic Tabata");
     eq(await p.textContent("#preset-list li:nth-child(5) .saved-sum"), "7:10 \u00b7 6 rounds \u00d7 1 loop");
     eq(await p.textContent("#saved-count"), "0/10", "presets are not counted");
@@ -362,7 +362,7 @@ async function visible(p, sel) { return p.isVisible(sel); }
     await p.click("[data-action=back] >> visible=true");
     await p.click("[data-action=go-saved]");
     await p.fill("#saved-search", "");
-    eq(await p.locator("#preset-list li").count(), 6, "search is cleared on entering");
+    eq(await p.locator("#preset-list li").count(), 8, "search is cleared on entering");
     eq(await p.textContent("#preset-list li:nth-child(3) .saved-sum"), "10:10 \u00b7 10 rounds \u00d7 1 loop", "preset itself unchanged");
     await p.click("[data-action=back] >> visible=true");
   });
@@ -465,7 +465,7 @@ async function visible(p, sel) { return p.isVisible(sel); }
     eq((await p.textContent("#setup-total")).trim(), "3:40", "4*40 + 60 cool");
     await p.click("[data-action=back] >> visible=true");
     await p.click("[data-action=go-saved]");
-    await p.click("#preset-list li:nth-child(6) .saved-open");
+    await p.click("#preset-list li:nth-child(8) .saved-open");
     eq(await p.locator("#blocks .block-card").count(), 2, "Circuit preset has 3 blocks");
     eq(await p.inputValue("#f-name1"), "Squats");
     await p.click("[data-action=save-workout]");
@@ -477,6 +477,80 @@ async function visible(p, sel) { return p.isVisible(sel); }
     await p.click("#saved-list li .saved-open");
     eq(await p.locator("#blocks .block-card").count(), 2, "blocks are saved with the workout");
     eq(await p.inputValue("#b1-name"), "Burpees");
+  });
+
+  await check("EMOM: type picker shows only its fields; minutes counted; Interval users see no extras", async () => {
+    await p.evaluate(() => localStorage.clear()); await p.reload();
+    await p.click("[data-action=go-setup]");
+    eq(await p.locator("#type-seg button").count(), 3);
+    eq(await p.getAttribute("#type-seg button[data-type=interval]", "aria-checked"), "true", "Interval by default");
+    ok(!(await visible(p, "#f-every")) && !(await visible(p, "#f-amrapDur")) && !(await visible(p, "#f-name1")), "nothing extra for Interval");
+    await p.click("#type-seg button[data-type=emom]");
+    ok(await visible(p, "#f-every") && await visible(p, "#f-rounds"), "Every and Rounds");
+    ok(!(await visible(p, "#f-work")) && !(await visible(p, "#f-loops")) && !(await visible(p, "#f-amrapDur")), "Interval fields hidden");
+    eq((await p.textContent("#setup-summary")).trim(), "EMOM \u00b7 8 rounds");
+    await setCount(p, "rounds", 10); await p.fill("#f-name1", "Swings");
+    await p.click("[role=switch] >> nth=0"); // get ready off
+    eq((await p.textContent("#setup-total")).trim(), "10:00");
+    await p.click("#setup-start");
+    eq((await p.textContent("#run-round")).trim(), "Minute 1 / 10");
+    eq((await p.textContent("#run-ex")).trim(), "Swings");
+    eq((await p.textContent("#run-loop")).trim(), "EMOM");
+    eq((await p.textContent("#cnt-work-total")).trim(), "1/10");
+    ok(!(await visible(p, "#amrap-box")));
+    await p.click("[aria-label='Stop workout']"); await p.click("#confirm-yes");
+    // type and values are remembered; Interval brings its fields back
+    await p.reload(); await p.click("[data-action=go-setup]");
+    eq(await p.getAttribute("#type-seg button[data-type=emom]", "aria-checked"), "true");
+    await p.click("#type-seg button[data-type=interval]");
+    ok(await visible(p, "#f-work") && await visible(p, "#f-loops") && !(await visible(p, "#f-every")));
+  });
+
+  await check("AMRAP: countdown, +1 round / undo, ignored while paused, result on the end screen and in History", async () => {
+    await p.evaluate(() => localStorage.clear()); await p.reload();
+    await p.click("[data-action=go-setup]");
+    await p.click("#type-seg button[data-type=amrap]");
+    ok(await visible(p, "#f-amrapDur") && !(await visible(p, "#f-every")) && !(await visible(p, "#f-rounds")));
+    await p.click("[role=switch] >> nth=0");
+    await setTime(p, "amrapDur", 12); await p.fill("#f-name1", "Burpees");
+    eq((await p.textContent("#setup-summary")).trim(), "AMRAP");
+    await p.click("#setup-start");
+    ok(await visible(p, "#amrap-box"));
+    eq((await p.textContent("#run-phase")).trim(), "AMRAP");
+    eq((await p.textContent("#run-round")).trim(), "Rounds: 0");
+    await p.click("#amrap-plus"); await p.click("#amrap-plus"); await p.click("#amrap-plus");
+    eq((await p.textContent("#run-round")).trim(), "Rounds: 3");
+    await p.click("#amrap-minus");
+    eq((await p.textContent("#run-round")).trim(), "Rounds: 2");
+    await p.click("#run-pause");
+    await p.click("#amrap-plus", { force: true });
+    eq((await p.textContent("#run-round")).trim(), "Rounds: 2", "no rounds while paused");
+    await p.click("#run-pause");
+    await p.click("#amrap-plus");
+    await p.waitForSelector("#screen-done:not([hidden])", { timeout: 20000 });
+    eq((await p.textContent("#done-results")).trim(), "Burpees: 3 rounds");
+    eq((await p.textContent("#done-summary")).trim(), "AMRAP");
+    await p.click("[data-action=go-home]"); await p.click("[data-action=go-history]");
+    eq((await p.textContent("#history-list li .history-res")).trim(), "Burpees: 3 rounds");
+    eq((await p.textContent("#history-list li .saved-name")).trim(), "Custom workout");
+  });
+
+  await check("Blocks of different types: card shows the fields of its type; EMOM and AMRAP presets", async () => {
+    await p.evaluate(() => localStorage.clear()); await p.reload();
+    await p.click("[data-action=go-setup]"); await p.click("#add-block");
+    ok(await visible(p, "#b0-work") && !(await visible(p, "#b0-every")) && !(await visible(p, "#b0-dur")));
+    await p.click("#blocks .type-seg button[data-type=emom]");
+    ok(await visible(p, "#b0-every") && await visible(p, "#b0-rounds") && !(await visible(p, "#b0-work")) && !(await visible(p, "#b0-dur")));
+    await p.click("#blocks .type-seg button[data-type=amrap]");
+    ok(await visible(p, "#b0-dur") && !(await visible(p, "#b0-rounds")) && await visible(p, "#b0-gap"));
+    eq((await p.textContent("#setup-total")).trim(), "14:40", "4:10 + 0:30 + 10:00");
+    await p.click("[data-action=back] >> visible=true");
+    await p.click("[data-action=go-saved]");
+    eq(await p.textContent("#preset-list li:nth-child(6) .saved-name"), "EMOM 10");
+    eq(await p.textContent("#preset-list li:nth-child(6) .saved-sum"), "10:10 \u00b7 EMOM \u00b7 10 rounds");
+    eq(await p.textContent("#preset-list li:nth-child(7) .saved-sum"), "12:10 \u00b7 AMRAP");
+    await p.click("#preset-list li:nth-child(7) .saved-open");
+    eq(await p.getAttribute("#type-seg button[data-type=amrap]", "aria-checked"), "true");
   });
 
   await check("Offline: app reopens without network (service worker)", async () => {

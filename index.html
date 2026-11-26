@@ -57,7 +57,7 @@
         <span id="home-streak" class="saved-count num">0 days</span>
       </button>
     </div>
-    <p class="home-foot num" id="app-version">v1.5.1</p>
+    <p class="home-foot num" id="app-version">v1.6.0</p>
   </section>
 
   <!-- ============ STOPWATCH ============ -->
@@ -169,6 +169,10 @@
       <span id="run-ex" class="run-ex" hidden></span>
       <span id="run-secs" class="run-secs num" role="timer" aria-live="off">20</span>
       <span id="run-round" class="run-round num">Round 1 / 8</span>
+      <div id="amrap-box" class="amrap-box" hidden>
+        <button type="button" id="amrap-plus" class="amrap-plus" data-action="amrap-plus">+1 ROUND</button>
+        <button type="button" id="amrap-minus" class="amrap-minus" data-action="amrap-minus">Undo last round</button>
+      </div>
       <div class="run-badges">
         <span id="badge-paused" class="badge badge-solid" hidden>PAUSED</span>
         <span id="badge-beep" class="badge" hidden>
@@ -226,6 +230,7 @@
         <span id="done-total" class="done-value num">4:10</span>
         <span id="done-summary" class="total-sub">8 rounds × 1 loop</span>
         <span id="done-streak" class="total-sub done-streak"></span>
+        <p id="done-results" class="done-results" hidden></p>
       </div>
     </div>
     <div class="done-actions">

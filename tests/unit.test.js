@@ -8,7 +8,7 @@ const Stopwatch = require("../js/stopwatch.js");
 const Progress = require("../js/progress-bar.js");
 const Sound = require("../js/sound.js").Sound;
 
-const DEF = { prep: true, prepDur: "10", work: "20", rest: "10", rounds: "8", loops: "1", between: "60", cool: false, coolDur: "120" };
+const DEF = { prep: true, prepDur: "10", work: "20", rest: "10", rounds: "8", loops: "1", between: "60", cool: false, coolDur: "120", type: "interval", every: "60", amrapDur: "600" };
 const cfg = (over) => Object.assign({}, DEF, over);
 const phasesOf = (over) => {
   const v = Plan.validate(cfg(over));
@@ -310,13 +310,13 @@ const Presets = require("../js/presets.js");
 
 test("ready-made workouts: 5, all valid, names unique, search ignores case and accents", () => {
   const all = Presets.list();
-  assert.equal(all.length, 6);
-  assert.equal(new Set(all.map((p) => p.name)).size, 6);
+  assert.equal(all.length, 8);
+  assert.equal(new Set(all.map((p) => p.name)).size, 8);
   all.forEach((p) => assert.equal(Plan.validate(p.cfg).ok, true, p.name));
   assert.equal(Presets.get(all[0].id).name, "Classic Tabata");
   assert.equal(Presets.get("nope"), null);
   assert.deepEqual(Presets.search(WorkoutStore.fold, "TABATA").map((p) => p.name), ["Classic Tabata"]);
-  assert.equal(Presets.search(WorkoutStore.fold, "").length, 6);
+  assert.equal(Presets.search(WorkoutStore.fold, "").length, 8);
   const classic = Plan.totalSeconds(Plan.buildPhases(Plan.validate(all[0].cfg).values));
   assert.equal(classic, 250, "Classic Tabata is the 4:10 default");
 });
@@ -434,4 +434,55 @@ test("blocks: sounds and the runner work on a multi-block workout", () => {
   for (let i = 0; i < ph.length && !r.done; i++) { t += ph[i].dur * 1000; r.update(t + 1); }
   assert.equal(r.done, true);
   assert.equal(total, 10 + 240 + 30 + 4 * 45);
+});
+
+// ---------------------------------------------------------------- EMOM and AMRAP
+test("EMOM: one Work phase per round, every X seconds, no rest phases", () => {
+  const v = Plan.validate(cfg({ type: "emom", every: "60", rounds: "10", name1: "Kettlebell swings" }));
+  assert.equal(v.ok, true, JSON.stringify(v.errors));
+  assert.equal(v.values.loops, 1);
+  const ph = Plan.buildPhases(v.values);
+  assert.equal(ph.length, 11, "Get ready + 10 minutes");
+  assert.equal(Plan.totalSeconds(ph), 10 + 600);
+  const m = ph.slice(1);
+  assert.ok(m.every((p) => p.type === "work" && p.dur === 60 && p.kind === "emom" && p.unit === "Minute" && p.rounds === 10 && p.name === "Kettlebell swings"));
+  assert.deepEqual(m.map((p) => p.round), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  const odd = Plan.buildPhases(Plan.validate(cfg({ type: "emom", every: "90", rounds: "3", prep: false })).values);
+  assert.equal(odd[0].unit, "Round");
+  assert.equal(Plan.totalSeconds(odd), 270);
+});
+
+test("AMRAP: a single countdown phase", () => {
+  const v = Plan.validate(cfg({ type: "amrap", amrapDur: "720", prep: false, cool: true, coolDur: "60" }));
+  assert.equal(v.ok, true, JSON.stringify(v.errors));
+  const ph = Plan.buildPhases(v.values);
+  assert.deepEqual(ph.map((p) => p.type), ["work", "cool"]);
+  assert.equal(ph[0].dur, 720); assert.equal(ph[0].kind, "amrap"); assert.equal(ph[0].label, "AMRAP");
+  assert.equal(Plan.totalSeconds(ph), 780);
+});
+
+test("types: only the fields of the chosen type are checked; unknown type is Interval; old setups are Interval", () => {
+  assert.equal(Plan.validate(cfg({ type: "emom", work: "", rest: "x", loops: "0" })).ok, true, "interval fields are ignored");
+  assert.equal(Plan.validate(cfg({ type: "emom", every: "5" })).ok, false);
+  assert.equal(Plan.validate(cfg({ type: "amrap", amrapDur: "3601" })).ok, false);
+  assert.equal(Plan.validate(cfg({ type: "amrap", rounds: "" , amrapDur: "600" })).ok, true);
+  assert.equal(Plan.validate(cfg({ type: "bogus" })).values.type, "interval");
+  assert.equal(Plan.normalizeCfg({ work: 30 }).type, "interval");
+  assert.equal(Plan.normalizeCfg({ type: "amrap", amrapDur: 300 }).type, "amrap");
+});
+
+test("blocks of different types in sequence: Interval, then EMOM, then AMRAP", () => {
+  const c = cfg({ prep: false, rounds: "1", blocks: [
+    { type: "emom", name: "Rows", every: "30", rounds: "2", gap: "10" },
+    { type: "amrap", name: "Burpees", dur: "120", gap: "0" }
+  ] });
+  const v = Plan.validate(c);
+  assert.equal(v.ok, true, JSON.stringify(v.errors));
+  const ph = Plan.buildPhases(v.values);
+  assert.deepEqual(ph.map((p) => p.type + p.block + (p.kind || "")), ["work1", "rest1", "between2", "work2emom", "work2emom", "work3amrap"]);
+  assert.equal(Plan.totalSeconds(ph), 20 + 10 + 10 + 60 + 120);
+  assert.equal(Math.max(...ph.map((p) => p.loop)), 3);
+  const bad = Plan.validate(cfg({ blocks: [{ type: "amrap", dur: "5", gap: "0" }, { type: "emom", every: "60", rounds: "0", gap: "0" }] }));
+  assert.deepEqual(Object.keys(bad.errors).sort(), ["b0.dur", "b1.rounds"]);
+  assert.equal(Plan.cleanBlocks([{ type: "weird", work: "5" }])[0].type, "interval");
 });
