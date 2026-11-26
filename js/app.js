@@ -23,7 +23,9 @@
   var storage = null;
   try { storage = window.localStorage; } catch (e) { /* storage blocked */ }
   var store = new WorkoutStore(storage);
+  var history = new HistoryStore(storage);
   var loadedId = null;        // saved workout opened in the setup, if any
+  var presetName = "";        // ready-made workout opened in the setup, if any
   var deleteId = null;        // saved workout waiting for delete confirmation
 
   Sound.setMuted(muted);
@@ -264,7 +266,11 @@
     Sound.unlock();
     var phases = Plan.buildPhases(check.values);
     runner = new TabataRunner(phases);
-    runInfo = { rounds: check.values.rounds, loops: check.values.loops, total: Plan.totalSeconds(phases) };
+    var w = loadedId ? store.get(loadedId) : null;
+    runInfo = {
+      rounds: check.values.rounds, loops: check.values.loops, total: Plan.totalSeconds(phases),
+      name: w ? w.name : presetName
+    };
     lastJumps = -1;
     bar.reset();
     runner.start(now());
@@ -277,6 +283,10 @@
     Sound.playNow("done");
     setText($("done-total"), Plan.formatClock(runInfo.total));
     setText($("done-summary"), plural(runInfo.rounds, "round") + " × " + plural(runInfo.loops, "loop"));
+    history.add(runInfo);
+    renderStreakCounts();
+    var streak = history.streak();
+    setText($("done-streak"), streak > 1 ? streak + " days in a row" : "");
     runner = null;
     Nav.show("done");
   }
@@ -395,6 +405,7 @@
       del.addEventListener("click", function () { deleteId = w.id; openConfirm("delete"); });
       list.appendChild(li);
     });
+    renderPresets(q);
     var empty = $("saved-empty");
     if (store.count() === 0) {
       empty.textContent = "No saved workouts yet. Set up a Tabata and press Save.";
@@ -407,6 +418,85 @@
     }
   }
 
+  function renderPresets(q) {
+    var list = $("preset-list");
+    list.textContent = "";
+    var items = Presets.search(WorkoutStore.fold, q);
+    items.forEach(function (pr) {
+      var li = document.createElement("li");
+      li.innerHTML = '<button type="button" class="saved-open"><span class="saved-name"></span><span class="saved-sum"></span></button>';
+      var open = li.querySelector(".saved-open");
+      li.querySelector(".saved-name").textContent = pr.name;
+      li.querySelector(".saved-sum").textContent = summaryOf(pr.cfg);
+      open.setAttribute("aria-label", "Open " + pr.name);
+      open.addEventListener("click", function () { openPreset(pr.id); });
+      list.appendChild(li);
+    });
+    setHidden($("preset-title"), !items.length);
+    setHidden(list, !items.length);
+  }
+
+  /** Opens a ready-made workout in the setup. It is a copy: changing it never changes the preset. */
+  function openPreset(id) {
+    var pr = Presets.get(id);
+    if (!pr) return;
+    Object.keys(Plan.DEFAULTS).forEach(function (k) {
+      var d = Plan.DEFAULTS[k];
+      var v = k in pr.cfg ? pr.cfg[k] : d;
+      cfg[k] = typeof d === "boolean" ? !!v : String(v);
+    });
+    loadedId = null;
+    presetName = pr.name;
+    Settings.saveSetup(cfg);
+    refreshSetup();
+    Nav.show("setup");
+  }
+
+  // ---------------------------------------------------------------- history
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+  function whenText(t) {
+    var d = new Date(t);
+    var today = HistoryStore.dayKey(new Date(now()));
+    var yest = HistoryStore.dayKey(new Date(now() - 86400000));
+    var key = HistoryStore.dayKey(d);
+    var hm = pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+    if (key === today) return "Today, " + hm;
+    if (key === yest) return "Yesterday, " + hm;
+    return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) + ", " + hm;
+  }
+  function streakText(n) { return n + (n === 1 ? " day" : " days"); }
+  function renderStreakCounts() {
+    setText($("home-streak"), streakText(history.streak()));
+  }
+  function renderHistory() {
+    var n = history.streak();
+    setText($("history-streak"), String(n));
+    setText($("history-streak-label"), n === 1 ? "day in a row" : "days in a row");
+    var week = $("history-week");
+    week.textContent = "";
+    history.week().forEach(function (d) {
+      var li = document.createElement("li");
+      li.className = (d.done ? "done " : "") + (d.today ? "today" : "");
+      li.innerHTML = '<span class="dot"></span><span></span>';
+      li.children[1].textContent = d.label;
+      li.setAttribute("aria-label", (d.today ? "Today" : d.key) + (d.done ? ": trained" : ": no workout"));
+      week.appendChild(li);
+    });
+    var list = $("history-list");
+    list.textContent = "";
+    var items = history.list();
+    items.forEach(function (e) {
+      var li = document.createElement("li");
+      li.innerHTML = '<span class="history-main"><span class="saved-name"></span><span class="history-when"></span></span><span class="saved-sum"></span>';
+      li.querySelector(".saved-name").textContent = e.name || "Custom workout";
+      li.querySelector(".history-when").textContent = whenText(e.t);
+      li.querySelector(".saved-sum").textContent = Plan.formatClock(e.total) + " · " + plural(e.rounds, "round") + " × " + plural(e.loops, "loop");
+      list.appendChild(li);
+    });
+    setHidden($("history-empty"), items.length > 0);
+    setHidden(list, !items.length);
+  }
+
   /** Opens a saved workout in the setup, ready for START. */
   function openSaved(id) {
     var w = store.get(id);
@@ -417,6 +507,7 @@
       cfg[k] = typeof d === "boolean" ? !!v : String(v);
     });
     loadedId = id;
+    presetName = "";
     store.markUsed(id);
     Settings.saveSetup(cfg);
     refreshSetup();
@@ -567,6 +658,7 @@
         break;
       case "setup":
       case "saved":
+      case "history":
       case "done":
         Nav.show("home");
         break;
@@ -588,6 +680,7 @@
     "go-stopwatch": function () { Nav.show("stopwatch"); },
     "go-setup": function () { refreshSetup(); Nav.show("setup"); },
     "go-home": function () { Nav.show("home"); },
+    "go-history": function () { renderHistory(); Nav.show("history"); },
     "go-saved": function () { $("saved-search").value = ""; renderSaved(); Nav.show("saved"); },
     "save-workout": function () {
       if (!Plan.validate(cfg).ok) return;
@@ -670,6 +763,7 @@
     if (document.visibilityState === "visible") {
       Sound.wake();
       updateWake();
+      renderStreakCounts();
       tick();
     }
   });
@@ -694,6 +788,7 @@
   refreshSetup();
   renderMute();
   renderSavedCount();
+  renderStreakCounts();
   Nav.init(handleBack);
   Nav.show("home");
   Sound.preload();

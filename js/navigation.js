@@ -10,7 +10,7 @@
 (function (root) {
   "use strict";
 
-  var SCREENS = ["home", "stopwatch", "setup", "saved", "run", "done"];
+  var SCREENS = ["home", "stopwatch", "setup", "saved", "history", "run", "done"];
   var current = "home";
   var depth = 0;          // 1 while our extra history entry exists
   var ignorePop = false;  // true while we remove the entry ourselves

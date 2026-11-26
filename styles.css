@@ -406,3 +406,33 @@ body.phase-between, body.phase-cool { --chip: rgba(11,22,32,.18); }
 @media (orientation: landscape) and (max-height: 560px) {
   .home-choices { flex-grow: 0; }
 }
+
+/* ---------- ready-made, history ---------- */
+.home-links { display: flex; flex-direction: column; gap: 12px; }
+.saved-scroll { flex-grow: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.saved-scroll > .saved-list { flex-grow: 0; overflow: visible; }
+.saved-sub { margin: 20px 8px 4px; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted-2); }
+.streak-card { margin: 8px 4px 12px; padding: 20px; border-radius: 20px; background: var(--surface-2, #12202D); display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.streak-num { font-family: var(--display); font-size: 64px; font-weight: 700; line-height: 1; color: var(--accent); }
+.streak-label { font-size: 15px; color: var(--muted); }
+.week { list-style: none; margin: 16px 0 0; padding: 0; display: flex; gap: 10px; }
+.week li { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--muted-2); }
+.week .dot { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #22364A; }
+.week .done .dot { background: var(--accent); border-color: var(--accent); }
+.week .today { color: var(--text); }
+.history-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 4px; }
+.history-list .saved-name { flex-grow: 1; min-width: 0; }
+.history-list .saved-sum { text-align: right; white-space: nowrap; }
+.history-when { font-size: 13px; color: var(--muted-2); }
+.history-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.done-streak { color: var(--accent); font-weight: 700; }
+
+@media (max-height: 700px) {
+  .home-links { gap: 8px; }
+  .home-links .saved-link { padding: 12px 20px; }
+  .screen-home { gap: 20px; }
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  .home-links { flex-direction: row; }
+  .home-links .saved-link { flex: 1; padding: 10px 16px; }
+}

@@ -304,3 +304,62 @@ test("kept after closing the app; damaged data is ignored", () => {
   assert.equal(new WorkoutStore(st).count(), 0);
   assert.equal(new WorkoutStore(null).count(), 0, "no storage available");
 });
+
+// ---------------------------------------------------------------- ready-made workouts
+const Presets = require("../js/presets.js");
+
+test("ready-made workouts: 5, all valid, names unique, search ignores case and accents", () => {
+  const all = Presets.list();
+  assert.equal(all.length, 5);
+  assert.equal(new Set(all.map((p) => p.name)).size, 5);
+  all.forEach((p) => assert.equal(Plan.validate(p.cfg).ok, true, p.name));
+  assert.equal(Presets.get(all[0].id).name, "Classic Tabata");
+  assert.equal(Presets.get("nope"), null);
+  assert.deepEqual(Presets.search(WorkoutStore.fold, "TABATA").map((p) => p.name), ["Classic Tabata"]);
+  assert.equal(Presets.search(WorkoutStore.fold, "").length, 5);
+  const classic = Plan.totalSeconds(Plan.buildPhases(Plan.validate(all[0].cfg).values));
+  assert.equal(classic, 250, "Classic Tabata is the 4:10 default");
+});
+
+// ---------------------------------------------------------------- history
+const HistoryStore = require("../js/history.js");
+// local noon of a given day, so the tests do not depend on the time zone
+const at = (y, m, d, h) => new Date(y, m - 1, d, h === undefined ? 12 : h, 0, 0).getTime();
+function histAt(storage, t) { return new HistoryStore(storage, () => t); }
+const W = { name: "Arms", total: 250, rounds: 8, loops: 1 };
+
+test("history: days in a row, a missed day breaks it, today may still be empty", () => {
+  const st = memStorage();
+  [[2026, 11, 20], [2026, 11, 21], [2026, 11, 22], [2026, 11, 24], [2026, 11, 25]].forEach(([y, m, d]) => histAt(st, at(y, m, d)).add(W));
+  assert.equal(histAt(st, at(2026, 11, 25, 20)).streak(), 2, "24 and 25 (the 23rd was missed)");
+  assert.equal(histAt(st, at(2026, 11, 26, 8)).streak(), 2, "not trained yet today: yesterday's streak is alive");
+  assert.equal(histAt(st, at(2026, 11, 27, 8)).streak(), 0, "a whole day missed");
+  const h = histAt(st, at(2026, 11, 26, 9)); h.add(W);
+  assert.equal(h.streak(), 3);
+  h.add(W);
+  assert.equal(h.streak(), 3, "two workouts in one day count once");
+  assert.equal(new HistoryStore(memStorage(), () => at(2026, 11, 26)).streak(), 0);
+});
+
+test("history: streak across a month and a year end, last 7 days", () => {
+  const st = memStorage();
+  [[2026, 12, 30], [2026, 12, 31], [2027, 1, 1]].forEach(([y, m, d]) => histAt(st, at(y, m, d)).add(W));
+  const h = histAt(st, at(2027, 1, 1, 22));
+  assert.equal(h.streak(), 3);
+  const week = h.week();
+  assert.equal(week.length, 7);
+  assert.equal(week[6].today, true);
+  assert.deepEqual(week.map((d) => d.done), [false, false, false, false, true, true, true]);
+});
+
+test("history: keeps the last 50 workouts, newest first; survives reopening; damaged data ignored", () => {
+  const st = memStorage();
+  for (let i = 0; i < 60; i++) histAt(st, at(2026, 1, 1) + i * 1000).add({ name: "W" + i, total: 100, rounds: 1, loops: 1 });
+  const h = histAt(st, at(2026, 2, 1));
+  assert.equal(h.count(), 50);
+  assert.equal(h.list()[0].name, "W59");
+  assert.equal(h.list()[49].name, "W10");
+  st.setItem("tabatale.history.v1", "{broken");
+  assert.equal(histAt(st, at(2026, 2, 1)).count(), 0);
+  assert.equal(new HistoryStore(null).streak(), 0, "no storage available");
+});

@@ -45,12 +45,19 @@
         </span>
       </button>
     </div>
-    <button type="button" class="saved-link" data-action="go-saved">
-      <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4z"/></svg>
-      <span>Saved workouts</span>
-      <span id="home-saved-count" class="saved-count num">0/10</span>
-    </button>
-    <p class="home-foot num" id="app-version">v1.3.3</p>
+    <div class="home-links">
+      <button type="button" class="saved-link" data-action="go-saved">
+        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4z"/></svg>
+        <span>Saved workouts</span>
+        <span id="home-saved-count" class="saved-count num">0/10</span>
+      </button>
+      <button type="button" class="saved-link" data-action="go-history">
+        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
+        <span>History</span>
+        <span id="home-streak" class="saved-count num">0 days</span>
+      </button>
+    </div>
+    <p class="home-foot num" id="app-version">v1.4.0</p>
   </section>
 
   <!-- ============ STOPWATCH ============ -->
@@ -117,8 +124,31 @@
       <label for="saved-search" class="sr-only">Search workouts</label>
       <input id="saved-search" type="search" placeholder="Search by name" autocomplete="off" enterkeyhint="search">
     </div>
-    <ul id="saved-list" class="saved-list" aria-label="Saved workouts"></ul>
-    <p id="saved-empty" class="saved-empty" hidden></p>
+    <div class="saved-scroll">
+      <ul id="saved-list" class="saved-list" aria-label="Saved workouts"></ul>
+      <p id="saved-empty" class="saved-empty" hidden></p>
+      <h2 id="preset-title" class="saved-sub">Ready-made</h2>
+      <ul id="preset-list" class="saved-list" aria-labelledby="preset-title"></ul>
+    </div>
+  </section>
+
+  <!-- ============ HISTORY ============ -->
+  <section id="screen-history" class="screen screen-history" aria-labelledby="history-title" hidden>
+    <div class="topbar">
+      <button type="button" class="icon-btn" aria-label="Back to home" data-action="back">
+        <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h1 id="history-title" class="title">History</h1>
+    </div>
+    <div class="saved-scroll">
+      <div class="streak-card">
+        <span id="history-streak" class="streak-num num">0</span>
+        <span id="history-streak-label" class="streak-label">days in a row</span>
+        <ol id="history-week" class="week" aria-label="Last 7 days"></ol>
+      </div>
+      <p id="history-empty" class="saved-empty" hidden>No workouts yet. Finish one and it will show up here.</p>
+      <ul id="history-list" class="saved-list history-list" aria-label="Completed workouts"></ul>
+    </div>
   </section>
 
   <!-- ============ WORKOUT ============ -->
@@ -194,6 +224,7 @@
         <span class="label">Total time</span>
         <span id="done-total" class="done-value num">4:10</span>
         <span id="done-summary" class="total-sub">8 rounds × 1 loop</span>
+        <span id="done-streak" class="total-sub done-streak"></span>
       </div>
     </div>
     <div class="done-actions">
@@ -262,6 +293,8 @@
 <script src="js/sound.js"></script>
 <script src="js/settings.js"></script>
 <script src="js/workouts.js"></script>
+<script src="js/presets.js"></script>
+<script src="js/history.js"></script>
 <script src="js/time-picker.js"></script>
 <script src="js/navigation.js"></script>
 <script src="js/app.js"></script>

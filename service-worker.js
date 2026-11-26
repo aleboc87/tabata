@@ -5,7 +5,7 @@
  * is downloaded in the background and takes over at once: the app reloads itself
  * as soon as no workout or stopwatch is running.
  */
-var VERSION = "tabatale-v1.3.3";
+var VERSION = "tabatale-v1.4.0";
 var FILES = [
   "./",
   "index.html",
@@ -18,6 +18,8 @@ var FILES = [
   "js/sound.js",
   "js/settings.js",
   "js/workouts.js",
+  "js/presets.js",
+  "js/history.js",
   "js/time-picker.js",
   "js/navigation.js",
   "js/app.js",

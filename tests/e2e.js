@@ -347,6 +347,60 @@ async function visible(p, sel) { return p.isVisible(sel); }
     await p.evaluate(() => localStorage.clear());
   });
 
+  await check("Ready-made: list, open as a copy, search, not counted in the 10", async () => {
+    await p.evaluate(() => localStorage.clear()); await p.reload();
+    await p.click("[data-action=go-saved]");
+    eq(await p.locator("#preset-list li").count(), 5);
+    eq(await p.textContent("#preset-list li:nth-child(1) .saved-name"), "Classic Tabata");
+    eq(await p.textContent("#preset-list li:nth-child(5) .saved-sum"), "7:10 \u00b7 6 rounds \u00d7 1 loop");
+    eq(await p.textContent("#saved-count"), "0/10", "presets are not counted");
+    await p.fill("#saved-search", "hiit");
+    eq(await p.locator("#preset-list li").count(), 1);
+    await p.click("#preset-list li .saved-open");
+    ok(await visible(p, "#screen-setup"), "opens the setup");
+    eq(await p.inputValue("#f-rounds"), "10");
+    await p.click("[data-action=back] >> visible=true");
+    await p.click("[data-action=go-saved]");
+    await p.fill("#saved-search", "");
+    eq(await p.locator("#preset-list li").count(), 5, "search is cleared on entering");
+    eq(await p.textContent("#preset-list li:nth-child(3) .saved-sum"), "10:10 \u00b7 10 rounds \u00d7 1 loop", "preset itself unchanged");
+    await p.click("[data-action=back] >> visible=true");
+  });
+
+  await check("History: completed workout shows up, with name and streak; stopped one does not", async () => {
+    await p.evaluate(() => localStorage.clear()); await p.reload();
+    eq(await p.textContent("#home-streak"), "0 days");
+    await p.click("[data-action=go-history]");
+    ok(await visible(p, "#history-empty"), "empty message");
+    await p.click("[data-action=back] >> visible=true");
+    await p.click("[data-action=go-saved]");
+    await p.click("#preset-list li:nth-child(1) .saved-open");
+    await p.click("[role=switch] >> nth=0");
+    await setTime(p, "work", 3); await setTime(p, "rest", 0); await setCount(p, "rounds", 1);
+    await p.click("#setup-start");
+    await p.click("[aria-label='Stop workout']"); await p.click("#confirm-yes");
+    await p.click("[data-action=back] >> visible=true");
+    eq(await p.textContent("#home-streak"), "0 days", "stopped workout is not recorded");
+    await p.click("[data-action=go-setup]");
+    await p.click("#setup-start");
+    await p.waitForSelector("#screen-done:not([hidden])", { timeout: 30000 });
+    await p.click("[data-action=go-home]");
+    eq(await p.textContent("#home-streak"), "1 day");
+    await p.click("[data-action=go-history]");
+    eq(await p.textContent("#history-streak"), "1");
+    eq(await p.textContent("#history-streak-label"), "day in a row");
+    eq(await p.locator("#history-list li").count(), 1);
+    eq(await p.textContent("#history-list li .saved-name"), "Classic Tabata");
+    ok((await p.textContent("#history-list li .history-when")).startsWith("Today, "));
+    eq(await p.locator("#history-week li.done").count(), 1);
+    await p.reload();
+    eq(await p.textContent("#home-streak"), "1 day", "remembered after reload");
+    // system back from History goes home
+    await p.click("[data-action=go-history]");
+    await p.goBack();
+    ok(await visible(p, "#screen-home"), "back goes home");
+  });
+
   await check("Offline: app reopens without network (service worker)", async () => {
     await p.evaluate(() => navigator.serviceWorker.ready);
     await p.waitForTimeout(500);
@@ -381,6 +435,7 @@ async function visible(p, sel) { return p.isVisible(sel); }
       const W = innerWidth, H = innerHeight;
       document.querySelectorAll("button, .run-secs, .run-phase, .bar-card, .chip").forEach((el) => {
         if (!el.offsetParent) return;
+        if (el.closest(".saved-scroll")) return; // lists scroll on purpose
         const r = el.getBoundingClientRect();
         if (r.width === 0) return;
         if (r.left < -1 || r.top < -1 || r.right > W + 1 || r.bottom > H + 1) out.push((el.id || el.className) + " " + Math.round(r.left) + "," + Math.round(r.top) + "," + Math.round(r.right) + "," + Math.round(r.bottom));
