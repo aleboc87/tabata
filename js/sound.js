@@ -1,14 +1,15 @@
 /*
  * TabatAle - Sounds and voice
  * Beep: generated on the fly (sine 880 Hz, 120 ms) on the last 3 seconds of Work.
- * Voice: two short recorded clips, "Let's GO" at the start of Work and "Rest" at the start of Rest.
+ * Voice: short recorded clips, "Let's GO" at the start of Work, "Rest" at the start of Rest
+ * and "Rinfrescàti" when the workout is complete.
  * Every sound is scheduled ahead on the audio clock, so it plays on time even if the screen is busy.
  */
 (function (root) {
   "use strict";
 
   var BEEP = { freq: 880, dur: 0.12, gain: 0.35 };
-  var VOICE_FILES = { go: "audio/go.mp3", rest: "audio/rest.mp3" };
+  var VOICE_FILES = { go: "audio/go.mp3", rest: "audio/rest.mp3", done: "audio/done.mp3" };
   var HORIZON_MS = 12000; // schedule sounds up to 12 s ahead
   var LATE_MS = 150;      // a sound that is late by less than this still plays
 
@@ -154,6 +155,13 @@
     }
   }
 
+  /** Plays a voice clip right away (e.g. "done" at the end of the workout). */
+  function playNow(name) {
+    if (muted || !ctx) return;
+    wake();
+    try { playVoiceAt(name, ctx.currentTime, "now:" + name + ":" + Date.now()); } catch (e) { /* ignore */ }
+  }
+
   function setMuted(m) {
     muted = !!m;
     if (muted) cancelAll();
@@ -170,6 +178,7 @@
     wake: wake,
     sync: sync,
     cancelAll: cancelAll,
+    playNow: playNow,
     setMuted: setMuted,
     isMuted: function () { return muted; },
     cuesOf: cuesOf

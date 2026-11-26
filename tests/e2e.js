@@ -238,10 +238,10 @@ async function visible(p, sel) { return p.isVisible(sel); }
     const beeps = rel.filter((x) => x.k === "beep").map((x) => x.t);
     const voices = rel.filter((x) => x.k !== "beep");
     eq(beeps.length, 6, "6 beeps");
-    eq(voices.length, 4, "4 voice clips");
+    eq(voices.length, 5, "4 voice clips + Rinfrescati at the end");
     const expectBeeps = [1, 2, 3, 8, 9, 10];
     beeps.forEach((b, i) => ok(Math.abs(b - expectBeeps[i]) <= 0.2, "beep " + i + " at " + b + "s, expected " + expectBeeps[i]));
-    [0, 4, 7, 11].forEach((t, i) => ok(Math.abs(voices[i].t - t) <= 0.2, "voice " + i + " at " + voices[i].t));
+    [0, 4, 7, 11, 14].forEach((t, i) => ok(Math.abs(voices[i].t - t) <= 0.2, "voice " + i + " at " + voices[i].t));
   });
 
   await check("Muted: no sounds at all", async () => {

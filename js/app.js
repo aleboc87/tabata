@@ -274,6 +274,7 @@
 
   function finishRun() {
     Sound.cancelAll();
+    Sound.playNow("done");
     setText($("done-total"), Plan.formatClock(runInfo.total));
     setText($("done-summary"), plural(runInfo.rounds, "round") + " × " + plural(runInfo.loops, "loop"));
     runner = null;

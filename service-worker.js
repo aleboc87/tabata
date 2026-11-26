@@ -4,7 +4,7 @@
  * opens from that copy, also without internet. A new version (new VERSION below)
  * is downloaded in the background and used the next time the app is opened.
  */
-var VERSION = "tabatale-v1.1.0";
+var VERSION = "tabatale-v1.2.0";
 var FILES = [
   "./",
   "index.html",
@@ -22,6 +22,7 @@ var FILES = [
   "js/app.js",
   "audio/go.mp3",
   "audio/rest.mp3",
+  "audio/done.mp3",
   "fonts/inter-latin-400-normal.woff2",
   "fonts/inter-latin-500-normal.woff2",
   "fonts/inter-latin-600-normal.woff2",
