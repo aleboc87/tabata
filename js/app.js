@@ -617,7 +617,7 @@
 
     var paused = runner.paused;
     setHidden($("badge-paused"), !paused);
-    var beep = ph.type === "work" && !paused && secs <= 3 && secs > 0;
+    var beep = !paused && secs <= 3 && secs > 0;
     setHidden($("badge-beep"), !beep);
     if (beep) setText($("badge-beep-text"), "BIP " + secs);
     var voice = !paused && (ph.type === "work" || ph.type === "rest") && elapsed < 1600 && !beep;

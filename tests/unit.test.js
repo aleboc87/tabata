@@ -220,13 +220,14 @@ test("counters: LOOP, WORK in loop, WORK total", () => {
 });
 
 // ---------------------------------------------------------------- sounds
-test("sound cues: Let's GO at 0 s, beeps at -3/-2/-1 s, Rest at start", () => {
+test("sound cues: Let's GO at 0 s, Rest at start, beeps at -3/-2/-1 s of every phase", () => {
   assert.deepEqual(Sound.cuesOf({ type: "work", dur: 20 }),
     [{ cue: "go", at: 0 }, { cue: "beep3", at: 17000 }, { cue: "beep2", at: 18000 }, { cue: "beep1", at: 19000 }]);
   assert.deepEqual(Sound.cuesOf({ type: "work", dur: 3 }), [{ cue: "go", at: 0 }, { cue: "beep2", at: 1000 }, { cue: "beep1", at: 2000 }]);
   assert.deepEqual(Sound.cuesOf({ type: "work", dur: 1 }), [{ cue: "go", at: 0 }]);
-  assert.deepEqual(Sound.cuesOf({ type: "rest", dur: 10 }), [{ cue: "rest", at: 0 }]);
-  for (const t of ["prep", "between", "cool"]) assert.deepEqual(Sound.cuesOf({ type: t, dur: 30 }), []);
+  assert.deepEqual(Sound.cuesOf({ type: "rest", dur: 10 }), [{ cue: "rest", at: 0 }, { cue: "beep3", at: 7000 }, { cue: "beep2", at: 8000 }, { cue: "beep1", at: 9000 }]);
+  for (const t of ["prep", "between", "cool"]) assert.deepEqual(Sound.cuesOf({ type: t, dur: 30 }), [{ cue: "beep3", at: 27000 }, { cue: "beep2", at: 28000 }, { cue: "beep1", at: 29000 }]);
+  assert.deepEqual(Sound.cuesOf({ type: "prep", dur: 2 }), [{ cue: "beep1", at: 1000 }]);
 });
 
 // ---------------------------------------------------------------- saved workouts

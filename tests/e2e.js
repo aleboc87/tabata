@@ -225,7 +225,7 @@ async function visible(p, sel) { return p.isVisible(sel); }
     await p.click("[aria-label='Stop workout']"); await p.click("#confirm-yes");
   });
 
-  await check("Sounds scheduled on time (Let's GO 0 s, beeps -3/-2/-1 s, Rest)", async () => {
+  await check("Sounds scheduled on time (Let's GO 0 s, Rest, beeps -3/-2/-1 s of every phase)", async () => {
     await p.evaluate(() => localStorage.clear()); await p.reload();
     await p.click("[data-action=go-setup]");
     await p.click("[role=switch] >> nth=0"); // get ready off
@@ -237,9 +237,9 @@ async function visible(p, sel) { return p.isVisible(sel); }
     const rel = s.map((x) => ({ k: x.kind, t: Math.round((x.at - t0) / 100) / 10 })).sort((a, b) => a.t - b.t);
     const beeps = rel.filter((x) => x.k === "beep").map((x) => x.t);
     const voices = rel.filter((x) => x.k !== "beep");
-    eq(beeps.length, 6, "6 beeps");
+    eq(beeps.length, 10, "6 beeps in Work + 4 in the Rest phases");
     eq(voices.length, 5, "4 voice clips + Rinfrescati at the end");
-    const expectBeeps = [1, 2, 3, 8, 9, 10];
+    const expectBeeps = [1, 2, 3, 5, 6, 8, 9, 10, 12, 13];
     beeps.forEach((b, i) => ok(Math.abs(b - expectBeeps[i]) <= 0.2, "beep " + i + " at " + b + "s, expected " + expectBeeps[i]));
     [0, 4, 7, 11, 14].forEach((t, i) => ok(Math.abs(voices[i].t - t) <= 0.2, "voice " + i + " at " + voices[i].t));
   });

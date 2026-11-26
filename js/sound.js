@@ -1,6 +1,6 @@
 /*
  * TabatAle - Sounds and voice
- * Beep: generated on the fly (sine 880 Hz, 120 ms) on the last 3 seconds of Work.
+ * Beep: generated on the fly (sine 880 Hz, 120 ms) on the last 3 seconds of every phase.
  * Voice: short recorded clips, "Let's GO" at the start of Work, "Rest" at the start of Rest
  * and "Rinfrescàti" when the workout is complete.
  * Every sound is scheduled ahead on the audio clock, so it plays on time even if the screen is busy.
@@ -118,14 +118,12 @@
   /** The sounds of one phase, as offsets in ms from its start. */
   function cuesOf(phase) {
     var out = [];
-    if (phase.type === "work") {
-      out.push({ cue: "go", at: 0 });
-      for (var s = 3; s >= 1; s--) {
-        var at = (phase.dur - s) * 1000;
-        if (at > 0) out.push({ cue: "beep" + s, at: at });
-      }
-    } else if (phase.type === "rest") {
-      out.push({ cue: "rest", at: 0 });
+    if (phase.type === "work") out.push({ cue: "go", at: 0 });
+    else if (phase.type === "rest") out.push({ cue: "rest", at: 0 });
+    // the same countdown ends every phase: preparation, work, rest, rest between loops/blocks, cool-down
+    for (var s = 3; s >= 1; s--) {
+      var at = (phase.dur - s) * 1000;
+      if (at > 0) out.push({ cue: "beep" + s, at: at });
     }
     return out;
   }
