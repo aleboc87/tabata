@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TabatAle</title>
+<meta name="description" content="Free interval timer: Tabata and stopwatch, on every device.">
+<meta name="theme-color" content="#0B1620">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TabatAle">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preload" href="fonts/space-grotesk-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ HOME ============ -->
+  <section id="screen-home" class="screen screen-home" aria-labelledby="home-title">
+    <header class="home-head">
+      <h1 id="home-title" class="brand">Tabat<span>Ale</span></h1>
+      <p class="muted">Interval training. Free, on every device.</p>
+    </header>
+    <div class="home-choices">
+      <button type="button" class="choice" data-action="go-stopwatch">
+        <span class="choice-icon">
+          <svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#5EEAD4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6M12 2v3"/></svg>
+        </span>
+        <span class="choice-text">
+          <span class="choice-title">Stopwatch</span>
+          <span class="choice-sub">Start, stop, lap and reset</span>
+        </span>
+      </button>
+      <button type="button" class="choice choice-primary" data-action="go-setup">
+        <span class="choice-icon">
+          <svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#5EEAD4" stroke-width="2.4" stroke-linecap="round"><path d="M4 20V11M9 20V4M14 20V13M19 20V7"/></svg>
+        </span>
+        <span class="choice-text">
+          <span class="choice-title">Tabata</span>
+          <span class="choice-sub">Work, rest, rounds and loops</span>
+        </span>
+      </button>
+    </div>
+    <button type="button" class="saved-link" data-action="go-saved">
+      <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4z"/></svg>
+      <span>Saved workouts</span>
+      <span id="home-saved-count" class="saved-count num">0/10</span>
+    </button>
+  </section>
+
+  <!-- ============ STOPWATCH ============ -->
+  <section id="screen-stopwatch" class="screen screen-stopwatch" aria-labelledby="sw-title" hidden>
+    <div class="topbar">
+      <button type="button" class="icon-btn" aria-label="Back to home" data-action="back">
+        <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h1 id="sw-title" class="title">Stopwatch</h1>
+    </div>
+    <div class="sw-display">
+      <div class="sw-time num" role="timer" aria-live="off"><span id="sw-main">00:00</span><span id="sw-tenths" class="sw-tenths">,0</span></div>
+      <span id="sw-status" class="sw-status">Ready</span>
+    </div>
+    <div class="sw-laps" id="sw-laps-box">
+      <ol id="sw-laps" class="laps" aria-label="Laps"></ol>
+      <p id="sw-nolaps" class="laps-empty">Press LAP while the stopwatch is running to record a lap.</p>
+    </div>
+    <div class="sw-controls">
+      <button type="button" id="sw-lap" class="round-btn round-small" data-action="sw-lap" hidden>LAP</button>
+      <button type="button" id="sw-reset" class="round-btn round-small" data-action="sw-reset">RESET</button>
+      <button type="button" id="sw-stop" class="round-btn round-big round-stop" data-action="sw-stop" hidden>STOP</button>
+      <button type="button" id="sw-start" class="round-btn round-big round-go" data-action="sw-start">START</button>
+      <span class="round-spacer" aria-hidden="true"></span>
+    </div>
+  </section>
+
+  <!-- ============ SET UP TABATA ============ -->
+  <section id="screen-setup" class="screen screen-setup" aria-labelledby="setup-title" hidden>
+    <div class="topbar">
+      <button type="button" class="icon-btn" aria-label="Back to home" data-action="back">
+        <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h1 id="setup-title" class="title">Set up Tabata</h1>
+    </div>
+    <form id="setup-form" class="setup-body" novalidate>
+      <!-- rows are created by app.js from TabataPlan.FIELDS -->
+    </form>
+    <div class="setup-foot">
+      <div class="total">
+        <span class="label">Total time</span>
+        <span id="setup-total" class="total-value num">—</span>
+        <span id="setup-summary" class="total-sub">—</span>
+      </div>
+      <button type="button" id="setup-save" class="save-btn" data-action="save-workout">Save</button>
+      <button type="button" id="setup-start" class="start-btn" data-action="start-run">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z" fill="currentColor"/></svg>
+        START
+      </button>
+    </div>
+  </section>
+
+  <!-- ============ SAVED WORKOUTS ============ -->
+  <section id="screen-saved" class="screen screen-saved" aria-labelledby="saved-title" hidden>
+    <div class="topbar">
+      <button type="button" class="icon-btn" aria-label="Back to home" data-action="back">
+        <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h1 id="saved-title" class="title">Saved workouts</h1>
+      <span id="saved-count" class="saved-count num">0/10</span>
+    </div>
+    <div class="search">
+      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <label for="saved-search" class="sr-only">Search workouts</label>
+      <input id="saved-search" type="search" placeholder="Search by name" autocomplete="off" enterkeyhint="search">
+    </div>
+    <ul id="saved-list" class="saved-list" aria-label="Saved workouts"></ul>
+    <p id="saved-empty" class="saved-empty" hidden></p>
+  </section>
+
+  <!-- ============ WORKOUT ============ -->
+  <section id="screen-run" class="screen screen-run" aria-label="Workout" hidden>
+    <div class="run-top">
+      <button type="button" class="chip-btn" aria-label="Stop workout" data-action="back">
+        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+      <span class="chip num" id="run-loop">Loop 1/1</span>
+      <button type="button" class="chip-btn" id="run-mute" aria-label="Mute" data-action="toggle-mute">
+        <svg class="ico-sound" aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13"/></svg>
+        <svg class="ico-muted" aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H3v6h3l5 4z"/><path d="M22 9l-6 6M16 9l6 6"/></svg>
+      </button>
+    </div>
+
+    <div class="run-main">
+      <span id="run-phase" class="run-phase">Work</span>
+      <span id="run-secs" class="run-secs num" role="timer" aria-live="off">20</span>
+      <span id="run-round" class="run-round num">Round 1 / 8</span>
+      <div class="run-badges">
+        <span id="badge-paused" class="badge badge-solid" hidden>PAUSED</span>
+        <span id="badge-beep" class="badge" hidden>
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 010 7"/></svg>
+          <span id="badge-beep-text">BIP 3</span>
+        </span>
+        <span id="badge-voice" class="badge badge-solid" hidden>
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 00-3 3v7a3 3 0 006 0V5a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v3"/></svg>
+          <span id="badge-voice-text">“Let's GO”</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="run-bottom">
+      <div class="bar-card">
+        <div class="bar" role="img" id="run-bar" aria-label="Workout progress">
+          <div class="bar-segs" id="run-segs"></div>
+          <div class="bar-cursor" id="run-cursor"></div>
+        </div>
+        <div class="bar-dots" id="run-dots" aria-hidden="true" hidden></div>
+        <div class="counters">
+          <span><b id="cnt-loop" class="num">1/1</b><small>Loop</small></span>
+          <span><b id="cnt-work-loop" class="num">1/8</b><small>Work · loop</small></span>
+          <span><b id="cnt-work-total" class="num">1/8</b><small>Work · total</small></span>
+        </div>
+      </div>
+      <div class="run-info">
+        <span><small>Next</small><b id="run-next">Rest · 10 s</b></span>
+        <span class="right"><small>Time left</small><b id="run-left" class="num">4:00</b></span>
+      </div>
+      <div class="run-controls">
+        <button type="button" class="ctrl-btn" id="run-prev" aria-label="Previous phase" data-action="prev">
+          <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 20L9 12l10-8z" fill="currentColor"/><path d="M5 19V5"/></svg>
+        </button>
+        <button type="button" class="ctrl-main" id="run-pause" aria-label="Pause" data-action="toggle-pause">
+          <svg class="ico-pause" aria-hidden="true" width="40" height="40" viewBox="0 0 24 24"><rect x="5" y="4" width="5" height="16" rx="1.5" fill="currentColor"/><rect x="14" y="4" width="5" height="16" rx="1.5" fill="currentColor"/></svg>
+          <svg class="ico-play" aria-hidden="true" width="40" height="40" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z" fill="currentColor"/></svg>
+        </button>
+        <button type="button" class="ctrl-btn" id="run-next-btn" aria-label="Skip to next phase" data-action="skip">
+          <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4l10 8-10 8z" fill="currentColor"/><path d="M19 5v14"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ WORKOUT COMPLETE ============ -->
+  <section id="screen-done" class="screen screen-done" aria-labelledby="done-title" hidden>
+    <div class="done-main">
+      <span class="done-check">
+        <svg aria-hidden="true" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+      </span>
+      <h1 id="done-title" class="done-title">Workout complete</h1>
+      <div class="done-total">
+        <span class="label">Total time</span>
+        <span id="done-total" class="done-value num">4:10</span>
+        <span id="done-summary" class="total-sub">8 rounds × 1 loop</span>
+      </div>
+    </div>
+    <div class="done-actions">
+      <button type="button" class="btn-primary" data-action="start-run">REPEAT WORKOUT</button>
+      <button type="button" class="btn-outline" data-action="go-setup">Edit settings</button>
+      <button type="button" class="btn-text" data-action="go-home">Back to home</button>
+    </div>
+  </section>
+
+  <!-- ============ TIME PICKER ============ -->
+  <div id="picker" class="overlay" hidden>
+    <div class="dialog picker" role="dialog" aria-modal="true" aria-labelledby="picker-title">
+      <h2 id="picker-title">Work</h2>
+      <div class="wheels">
+        <div class="wheel-band" aria-hidden="true"></div>
+        <div class="wheel-col">
+          <div class="wheel" id="wheel-min" tabindex="0" role="spinbutton" aria-label="Minutes" aria-valuemin="0"></div>
+          <span class="wheel-unit">min</span>
+        </div>
+        <span class="wheel-sep" aria-hidden="true">:</span>
+        <div class="wheel-col">
+          <div class="wheel" id="wheel-sec" tabindex="0" role="spinbutton" aria-label="Seconds" aria-valuemin="0"></div>
+          <span class="wheel-unit">sec</span>
+        </div>
+      </div>
+      <p id="picker-hint" class="picker-hint" aria-live="polite"></p>
+      <button type="button" id="picker-set" class="btn-primary">Set</button>
+      <button type="button" id="picker-cancel" class="btn-outline">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ============ NAME (save / rename) ============ -->
+  <div id="name-dialog" class="overlay" hidden>
+    <form class="dialog" id="name-form" role="dialog" aria-modal="true" aria-labelledby="name-title" novalidate>
+      <h2 id="name-title">Save workout</h2>
+      <div id="name-edit" class="name-edit">
+        <label for="name-input" class="label">Name</label>
+        <input id="name-input" class="text-in" type="text" maxlength="30" autocomplete="off" enterkeyhint="done" aria-describedby="name-msg">
+        <p id="name-msg" class="name-msg" aria-live="polite"></p>
+        <button type="submit" id="name-ok" class="btn-primary">Save</button>
+        <button type="button" id="name-cancel" class="btn-outline">Cancel</button>
+      </div>
+      <div id="name-replace" class="name-edit" hidden>
+        <p id="name-replace-text"></p>
+        <button type="button" id="name-replace-yes" class="btn-primary">Replace</button>
+        <button type="button" id="name-replace-no" class="btn-outline">Back</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ============ CONFIRM ============ -->
+  <div id="confirm" class="overlay" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-text">
+      <h2 id="confirm-title">Stop the workout?</h2>
+      <p id="confirm-text">Your progress will be lost and you will go back to the Tabata setup.</p>
+      <button type="button" id="confirm-yes" class="btn-danger" data-action="confirm-yes">Stop workout</button>
+      <button type="button" id="confirm-no" class="btn-outline" data-action="confirm-no">Keep going</button>
+    </div>
+  </div>
+
+</div>
+<script src="js/tabata-plan.js"></script>
+<script src="js/tabata-runner.js"></script>
+<script src="js/stopwatch.js"></script>
+<script src="js/progress-bar.js"></script>
+<script src="js/sound.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/workouts.js"></script>
+<script src="js/time-picker.js"></script>
+<script src="js/navigation.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
