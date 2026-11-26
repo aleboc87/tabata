@@ -50,7 +50,7 @@
   /** Records a completed workout: { name, total (seconds), rounds, loops }. */
   HistoryStore.prototype.add = function (info) {
     var t = this.clock();
-    this.entries.unshift({ t: t, name: info.name || "", total: info.total, rounds: info.rounds, loops: info.loops });
+    this.entries.unshift({ t: t, name: info.name || "", total: info.total, rounds: info.rounds, loops: info.loops, blocks: info.blocks || 1, totalRounds: info.totalRounds || info.rounds * info.loops });
     this.entries = this.entries.slice(0, MAX_ENTRIES);
     var key = dayKey(new Date(t));
     if (this.days.indexOf(key) < 0) {

@@ -17,7 +17,14 @@
     make("Beginner", { work: 20, rest: 40, rounds: 6 }),
     make("HIIT 30/30", { work: 30, rest: 30, rounds: 10 }),
     make("Endurance", { work: 40, rest: 20, rounds: 8 }),
-    make("Core blast", { work: 45, rest: 15, rounds: 6, cool: true, coolDur: 60 })
+    make("Core blast", { work: 45, rest: 15, rounds: 6, cool: true, coolDur: 60 }),
+    make("Circuit", {
+      work: 40, rest: 20, rounds: 4, name1: "Squats",
+      blocks: [
+        { name: "Push-ups", work: "40", rest: "20", rounds: "4", gap: "30" },
+        { name: "Burpees", work: "30", rest: "30", rounds: "4", gap: "30" }
+      ]
+    })
   ];
 
   var API = {

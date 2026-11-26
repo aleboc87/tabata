@@ -57,7 +57,7 @@
         <span id="home-streak" class="saved-count num">0 days</span>
       </button>
     </div>
-    <p class="home-foot num" id="app-version">v1.4.0</p>
+    <p class="home-foot num" id="app-version">v1.5.0</p>
   </section>
 
   <!-- ============ STOPWATCH ============ -->
@@ -166,6 +166,7 @@
 
     <div class="run-main">
       <span id="run-phase" class="run-phase">Work</span>
+      <span id="run-ex" class="run-ex" hidden></span>
       <span id="run-secs" class="run-secs num" role="timer" aria-live="off">20</span>
       <span id="run-round" class="run-round num">Round 1 / 8</span>
       <div class="run-badges">
@@ -189,8 +190,8 @@
         </div>
         <div class="bar-dots" id="run-dots" aria-hidden="true" hidden></div>
         <div class="counters">
-          <span><b id="cnt-loop" class="num">1/1</b><small>Loop</small></span>
-          <span><b id="cnt-work-loop" class="num">1/8</b><small>Work · loop</small></span>
+          <span><b id="cnt-loop" class="num">1/1</b><small id="lbl-cnt-loop">Loop</small></span>
+          <span><b id="cnt-work-loop" class="num">1/8</b><small id="lbl-cnt-work-loop">Work · loop</small></span>
           <span><b id="cnt-work-total" class="num">1/8</b><small>Work · total</small></span>
         </div>
       </div>

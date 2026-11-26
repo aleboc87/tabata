@@ -209,7 +209,7 @@ test("bar over 40 segments: current loop only, plus dots", () => {
 
 test("counters: LOOP, WORK in loop, WORK total", () => {
   const ph = phasesOf({ loops: "3", cool: true });
-  const c = (i) => Progress.counters(ph, i, 8, 3);
+  const c = (i) => { const x = Progress.counters(ph, i, 8, 3); assert.deepEqual(x.labels, { loop: "Loop", workLoop: "Work \u00b7 loop" }); delete x.labels; return x; };
   assert.deepEqual(c(0), { loop: "1/3", workLoop: "–/8", workTotal: "–/24" });
   assert.deepEqual(c(1), { loop: "1/3", workLoop: "1/8", workTotal: "1/24" });
   assert.deepEqual(c(2), { loop: "1/3", workLoop: "1/8", workTotal: "1/24" });
@@ -310,13 +310,13 @@ const Presets = require("../js/presets.js");
 
 test("ready-made workouts: 5, all valid, names unique, search ignores case and accents", () => {
   const all = Presets.list();
-  assert.equal(all.length, 5);
-  assert.equal(new Set(all.map((p) => p.name)).size, 5);
+  assert.equal(all.length, 6);
+  assert.equal(new Set(all.map((p) => p.name)).size, 6);
   all.forEach((p) => assert.equal(Plan.validate(p.cfg).ok, true, p.name));
   assert.equal(Presets.get(all[0].id).name, "Classic Tabata");
   assert.equal(Presets.get("nope"), null);
   assert.deepEqual(Presets.search(WorkoutStore.fold, "TABATA").map((p) => p.name), ["Classic Tabata"]);
-  assert.equal(Presets.search(WorkoutStore.fold, "").length, 5);
+  assert.equal(Presets.search(WorkoutStore.fold, "").length, 6);
   const classic = Plan.totalSeconds(Plan.buildPhases(Plan.validate(all[0].cfg).values));
   assert.equal(classic, 250, "Classic Tabata is the 4:10 default");
 });
@@ -362,4 +362,76 @@ test("history: keeps the last 50 workouts, newest first; survives reopening; dam
   st.setItem("tabatale.history.v1", "{broken");
   assert.equal(histAt(st, at(2026, 2, 1)).count(), 0);
   assert.equal(new HistoryStore(null).streak(), 0, "no storage available");
+});
+
+// ---------------------------------------------------------------- blocks and exercise names
+const BLK = (over) => Object.assign({ name: "", work: "30", rest: "15", rounds: "4", gap: "30" }, over);
+
+test("blocks: a plain workout is unchanged (one block, no names, no extra phases)", () => {
+  const ph = phasesOf({});
+  assert.equal(ph.length, 17);
+  assert.ok(ph.every((p) => p.block === 1 && !("name" in p) && !("next" in p)));
+  assert.equal(Plan.validate(cfg({})).values.extra.length, 0);
+  assert.equal(Plan.validate(cfg({ blocks: [] })).ok, true);
+});
+
+test("blocks: order, rest before a block, total time, names, cool down at the very end", () => {
+  const c = cfg({ prep: true, cool: true, coolDur: "60", name1: " Burpees ", blocks: [BLK({ name: "Squats" }), BLK({ work: "40", rest: "0", rounds: "2", gap: "0" })] });
+  const v = Plan.validate(c);
+  assert.equal(v.ok, true, JSON.stringify(v.errors));
+  const ph = Plan.buildPhases(v.values);
+  // 10 prep + 8*(20+10) + [30 + 4*(30+15)] + [2*40] + 60 cool
+  assert.equal(Plan.totalSeconds(ph), 10 + 240 + 30 + 180 + 80 + 60);
+  assert.equal(ph[0].next, "Burpees", "Get ready announces the first exercise");
+  assert.equal(ph[1].name, "Burpees");
+  const gap = ph.find((p) => p.type === "between");
+  assert.equal(gap.label, "Block rest"); assert.equal(gap.dur, 30); assert.equal(gap.next, "Squats"); assert.equal(gap.block, 2);
+  const blocks = ph.filter((p) => p.type === "work").map((p) => p.block);
+  assert.deepEqual([...new Set(blocks)], [1, 2, 3]);
+  assert.equal(ph.filter((p) => p.type === "work" && p.block === 3).length, 2);
+  assert.equal(ph.filter((p) => p.block === 3 && p.type === "rest").length, 0, "rest 0 leaves no phase");
+  assert.equal(ph.filter((p) => p.block === 3 && p.type === "between").length, 0, "rest before = 0 leaves no phase");
+  assert.equal(ph[ph.length - 1].type, "cool");
+  const loops = ph.map((p) => p.loop);
+  assert.equal(Math.max(...loops), 3, "loop keeps counting: block 1, 2, 3");
+  assert.equal(ph.find((p) => p.type === "work" && p.block === 2).rounds, 4);
+});
+
+test("blocks: loops of the first block still work with extra blocks", () => {
+  const ph = phasesOf({ prep: false, loops: "2", between: "20", rounds: "2", blocks: [BLK({ rounds: "1", gap: "5" })] });
+  assert.deepEqual(ph.map((p) => p.type + p.block), ["work1", "rest1", "work1", "rest1", "between1", "work1", "rest1", "work1", "rest1", "between2", "work2", "rest2"]);
+});
+
+test("blocks: counters follow the block", () => {
+  const ph = phasesOf({ prep: false, rounds: "2", blocks: [BLK({ rounds: "3" })] });
+  const first = Progress.counters(ph, 0, 2, 2);
+  assert.deepEqual(first, { loop: "1/2", workLoop: "1/2", workTotal: "1/5", labels: { loop: "Block", workLoop: "Work \u00b7 block" } });
+  const idx = ph.findIndex((p) => p.type === "work" && p.block === 2);
+  assert.deepEqual(Progress.counters(ph, idx + 2, 2, 2), { loop: "2/2", workLoop: "2/3", workTotal: "4/5", labels: { loop: "Block", workLoop: "Work \u00b7 block" } });
+  const gap = ph.findIndex((p) => p.type === "between");
+  assert.equal(Progress.counters(ph, gap, 2, 2).workLoop, "0/3");
+});
+
+test("blocks: validation of the extra blocks, names are optional and trimmed", () => {
+  const bad = Plan.validate(cfg({ blocks: [BLK({ work: "0" }), BLK({ rounds: "" }), BLK({ gap: "601" })] }));
+  assert.equal(bad.ok, false);
+  assert.deepEqual(Object.keys(bad.errors).sort(), ["b0.work", "b1.rounds", "b2.gap"]);
+  const many = Plan.validate(cfg({ blocks: new Array(10).fill(0).map(() => BLK()) }));
+  assert.equal(many.ok, false, "at most 10 blocks in all");
+  assert.equal(Plan.validate(cfg({ blocks: new Array(9).fill(0).map(() => BLK()) })).ok, true);
+  const v = Plan.validate(cfg({ name1: "   ", blocks: [BLK({ name: "  A   very  long name that goes well beyond thirty characters  " })] }));
+  assert.equal(v.values.name, "");
+  assert.equal(v.values.extra[0].name.length <= 30, true);
+  assert.equal(v.values.extra[0].name.includes("  "), false);
+});
+
+test("blocks: sounds and the runner work on a multi-block workout", () => {
+  const ph = phasesOf({ blocks: [BLK()] });
+  const r = new Runner(ph);
+  r.start(0);
+  let t = 0;
+  const total = Plan.totalSeconds(ph);
+  for (let i = 0; i < ph.length && !r.done; i++) { t += ph[i].dur * 1000; r.update(t + 1); }
+  assert.equal(r.done, true);
+  assert.equal(total, 10 + 240 + 30 + 4 * 45);
 });

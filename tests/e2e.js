@@ -350,7 +350,7 @@ async function visible(p, sel) { return p.isVisible(sel); }
   await check("Ready-made: list, open as a copy, search, not counted in the 10", async () => {
     await p.evaluate(() => localStorage.clear()); await p.reload();
     await p.click("[data-action=go-saved]");
-    eq(await p.locator("#preset-list li").count(), 5);
+    eq(await p.locator("#preset-list li").count(), 6);
     eq(await p.textContent("#preset-list li:nth-child(1) .saved-name"), "Classic Tabata");
     eq(await p.textContent("#preset-list li:nth-child(5) .saved-sum"), "7:10 \u00b7 6 rounds \u00d7 1 loop");
     eq(await p.textContent("#saved-count"), "0/10", "presets are not counted");
@@ -362,7 +362,7 @@ async function visible(p, sel) { return p.isVisible(sel); }
     await p.click("[data-action=back] >> visible=true");
     await p.click("[data-action=go-saved]");
     await p.fill("#saved-search", "");
-    eq(await p.locator("#preset-list li").count(), 5, "search is cleared on entering");
+    eq(await p.locator("#preset-list li").count(), 6, "search is cleared on entering");
     eq(await p.textContent("#preset-list li:nth-child(3) .saved-sum"), "10:10 \u00b7 10 rounds \u00d7 1 loop", "preset itself unchanged");
     await p.click("[data-action=back] >> visible=true");
   });
@@ -399,6 +399,84 @@ async function visible(p, sel) { return p.isVisible(sel); }
     await p.click("[data-action=go-history]");
     await p.goBack();
     ok(await visible(p, "#screen-home"), "back goes home");
+  });
+
+  await check("Blocks: hidden until added; names optional; run shows exercise, block counters and block rest", async () => {
+    await p.evaluate(() => localStorage.clear()); await p.reload();
+    await p.click("[data-action=go-setup]");
+    ok(!(await visible(p, "#f-name1")), "no exercise field for a plain workout");
+    ok(await visible(p, "#add-block"), "Add block is offered");
+    await p.click("[role=switch] >> nth=0"); // get ready off
+    await setTime(p, "work", 3); await setTime(p, "rest", 0); await setCount(p, "rounds", 1);
+    await p.click("#add-block");
+    ok(await visible(p, "#f-name1"), "first block can be named once there are two");
+    eq(await p.locator("#blocks .block-card").count(), 1);
+    eq(await p.inputValue("#b0-rounds"), "1", "new block starts like the first one");
+    await p.fill("#f-name1", "Burpees"); await p.fill("#b0-name", "Squats");
+    const setTimeId = async (id, secs) => {
+      await p.click("#" + id);
+      await p.evaluate(([m, s]) => { document.getElementById("wheel-min").scrollTop = m * 44; document.getElementById("wheel-sec").scrollTop = s * 44; }, [Math.floor(secs / 60), secs % 60]);
+      await p.waitForTimeout(250); await p.click("#picker-set");
+    };
+    await setTimeId("b0-gap", 2); await setTimeId("b0-work", 3); await setTimeId("b0-rest", 0);
+    eq((await p.textContent("#setup-total")).trim(), "0:08", "3 + 2 + 3");
+    eq((await p.textContent("#setup-summary")).trim(), "2 blocks \u00b7 2 rounds");
+    await p.click("#setup-start");
+    eq((await p.textContent("#run-ex")).trim(), "Burpees");
+    eq((await p.textContent("#run-loop")).trim(), "Block 1/2");
+    eq((await p.textContent("#lbl-cnt-loop")).trim(), "Block");
+    eq((await p.textContent("#cnt-loop")).trim(), "1/2");
+    await p.waitForFunction(() => document.getElementById("run-phase").textContent === "Block rest", null, { timeout: 8000 });
+    eq((await p.textContent("#run-ex")).trim(), "Next: Squats");
+    eq((await p.textContent("#cnt-work-loop")).trim(), "0/1");
+    await p.waitForFunction(() => document.getElementById("run-phase").textContent === "Work" && document.getElementById("run-ex").textContent === "Squats", null, { timeout: 8000 });
+    eq((await p.textContent("#run-loop")).trim(), "Block 2/2");
+    eq((await p.textContent("#cnt-work-total")).trim(), "2/2");
+    await p.waitForSelector("#screen-done:not([hidden])", { timeout: 15000 });
+    eq((await p.textContent("#done-summary")).trim(), "2 blocks \u00b7 2 rounds");
+    // blocks are remembered; removing them brings back the plain setup
+    await p.reload();
+    await p.click("[data-action=go-setup]");
+    eq(await p.inputValue("#b0-name"), "Squats");
+    await p.click("[aria-label='Remove block 2']");
+    ok(!(await visible(p, "#f-name1")), "plain workout again");
+    eq(await p.locator("#blocks .block-card").count(), 0);
+    // history shows the shape
+    await p.click("[data-action=back] >> visible=true");
+    await p.click("[data-action=go-history]");
+    eq((await p.textContent("#history-list li .saved-sum")).replace(/^\S+ \u00b7 /, ""), "2 blocks \u00b7 2 rounds");
+  });
+
+  await check("Blocks: settings and saved workouts from before still load and run", async () => {
+    await p.evaluate(() => {
+      localStorage.clear();
+      localStorage.setItem("tabatale.settings.v1", JSON.stringify({ prep: true, prepDur: 10, work: 45, rest: 15, rounds: 6, loops: 2, between: 30, cool: false, coolDur: 120 }));
+      localStorage.setItem("tabatale.workouts.v1", JSON.stringify([{ id: "w1", name: "Old one", cfg: { prep: false, prepDur: 10, work: 30, rest: 10, rounds: 4, loops: 1, between: 60, cool: true, coolDur: 60 }, createdAt: 1, usedAt: 1 }]));
+    });
+    await p.reload();
+    await p.click("[data-action=go-setup]");
+    eq(await p.inputValue("#f-rounds"), "6");
+    eq((await p.textContent("#setup-total")).trim(), "12:40", "10 + 2*6*60 + 30");
+    ok(!(await visible(p, "#f-name1")) && !(await visible(p, "#blocks .block-card")));
+    await p.click("[data-action=back] >> visible=true");
+    await p.click("[data-action=go-saved]");
+    eq(await p.textContent("#saved-list li .saved-sum"), "3:40 \u00b7 4 rounds \u00d7 1 loop");
+    await p.click("#saved-list li .saved-open");
+    eq((await p.textContent("#setup-total")).trim(), "3:40", "4*40 + 60 cool");
+    await p.click("[data-action=back] >> visible=true");
+    await p.click("[data-action=go-saved]");
+    await p.click("#preset-list li:nth-child(6) .saved-open");
+    eq(await p.locator("#blocks .block-card").count(), 2, "Circuit preset has 3 blocks");
+    eq(await p.inputValue("#f-name1"), "Squats");
+    await p.click("[data-action=save-workout]");
+    await p.fill("#name-input", "My circuit"); await p.click("#name-ok");
+    await p.click("[data-action=back] >> visible=true");
+    await p.reload();
+    await p.click("[data-action=go-saved]");
+    await p.fill("#saved-search", "circuit");
+    await p.click("#saved-list li .saved-open");
+    eq(await p.locator("#blocks .block-card").count(), 2, "blocks are saved with the workout");
+    eq(await p.inputValue("#b1-name"), "Burpees");
   });
 
   await check("Offline: app reopens without network (service worker)", async () => {

@@ -41,6 +41,18 @@
     if (el.hidden !== hidden) el.hidden = hidden;
   }
   function plural(n, word) { return n + " " + word + (n === 1 ? "" : "s"); }
+  /** "8 rounds × 1 loop", or "3 blocks · 20 rounds" when the workout has several blocks. */
+  function shapeText(s) {
+    if (s.blocks > 1) return plural(s.blocks, "block") + " \u00b7 " + plural(s.totalRounds, "round");
+    return plural(s.rounds, "round") + " \u00d7 " + plural(s.loops, "loop");
+  }
+  function shapeOfValues(v) {
+    var extra = v.extra || [];
+    return {
+      rounds: v.rounds, loops: v.loops, blocks: extra.length + 1,
+      totalRounds: extra.reduce(function (a, b) { return a + b.rounds; }, v.rounds * v.loops)
+    };
+  }
 
   // ---------------------------------------------------------------- keep the screen on
   var wakeLock = null;
@@ -167,6 +179,166 @@
       form.appendChild(section);
     });
     form.addEventListener("submit", function (e) { e.preventDefault(); });
+    buildBlocksUI(form);
+  }
+
+  // ---------------------------------------------------------------- extra blocks and exercise names
+  var ICON_X = '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+  var blocksBox = null, name1Row = null, name1Input = null, addBtn = null;
+  var blockRefs = [];     // per extra block: { name, rows: { key: {row,input,dec,inc,hint} } }
+  var blocksBuilt = -1;   // how many extra blocks the screen shows now
+
+  function nameInputHTML(id) {
+    return '<input id="' + id + '" class="text-in" type="text" maxlength="' + Plan.NAME_MAX + '" placeholder="Optional, e.g. Squats" autocomplete="off" enterkeyhint="done">';
+  }
+
+  function buildBlocksUI(form) {
+    // the first block gets a name field only once there is more than one block
+    name1Row = document.createElement("div");
+    name1Row.className = "row name-row";
+    name1Row.hidden = true;
+    name1Row.innerHTML = '<span class="row-text"><label class="row-label" for="f-name1">Block 1 · exercise</label></span>' + nameInputHTML("f-name1");
+    name1Input = name1Row.querySelector("input");
+    name1Input.addEventListener("input", function () { cfg.name1 = name1Input.value; saveAndRefresh(); });
+    form.insertBefore(name1Row, form.firstChild);
+
+    blocksBox = document.createElement("div");
+    blocksBox.id = "blocks";
+    blocksBox.className = "blocks";
+    form.appendChild(blocksBox);
+
+    addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.className = "add-block";
+    addBtn.id = "add-block";
+    addBtn.innerHTML = '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span>Add block</span>';
+    addBtn.addEventListener("click", function () {
+      if (cfg.blocks.length >= Plan.MAX_BLOCKS - 1) return;
+      var b = JSON.parse(JSON.stringify(Plan.BLOCK_DEFAULTS));
+      // a new block starts like the first one: easy to change a few numbers
+      b.work = cfg.work; b.rest = cfg.rest; b.rounds = cfg.rounds;
+      cfg.blocks.push(b);
+      saveAndRefresh();
+      var last = blockRefs[blockRefs.length - 1];
+      if (last) { try { last.name.focus(); last.name.scrollIntoView({ block: "center" }); } catch (e) { /* ignore */ } }
+    });
+    form.appendChild(addBtn);
+  }
+
+  function blockRow(i, key) {
+    var f = Plan.BLOCK_FIELDS[key];
+    var row = document.createElement("div");
+    row.className = "row";
+    var id = "b" + i + "-" + key;
+    row.innerHTML =
+      '<span class="row-text"><label class="row-label" for="' + id + '"></label><span class="row-hint"></span></span>' +
+      '<span class="stepper">' +
+      '<button type="button" class="step-btn" data-step="-1">−</button>' +
+      (f.seconds
+        ? '<button type="button" class="time-btn" id="' + id + '"></button>'
+        : '<input class="num-in" id="' + id + '" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off">') +
+      '<button type="button" class="step-btn" data-step="1">+</button></span>';
+    row.querySelector("label").textContent = f.label;
+    var input = row.querySelector("#" + id);
+    var dec = row.querySelector('[data-step="-1"]'), inc = row.querySelector('[data-step="1"]');
+    dec.setAttribute("aria-label", "Decrease " + f.label + ", block " + (i + 2));
+    inc.setAttribute("aria-label", "Increase " + f.label + ", block " + (i + 2));
+    function get() { return cfg.blocks[i]; }
+    if (f.seconds) {
+      input.addEventListener("click", function () {
+        var cur = Plan.parseField(key, get()[key], Plan.BLOCK_FIELDS);
+        TimePicker.open({
+          label: f.label, min: f.min, max: f.max, value: cur === null ? Number(Plan.BLOCK_DEFAULTS[key]) : cur,
+          returnFocus: input, onSet: function (v) { get()[key] = String(v); saveAndRefresh(); }
+        });
+      });
+    } else {
+      input.addEventListener("input", function () {
+        var clean = input.value.replace(/[^\d]/g, "").slice(0, 4);
+        if (clean !== input.value) input.value = clean;
+        get()[key] = clean;
+        saveAndRefresh();
+      });
+      input.addEventListener("blur", function () {
+        var v = Plan.parseField(key, get()[key], Plan.BLOCK_FIELDS);
+        if (v !== null && String(v) !== get()[key]) { get()[key] = String(v); input.value = get()[key]; saveAndRefresh(); }
+      });
+    }
+    function step(dir) {
+      var cur = parseInt(get()[key], 10);
+      if (isNaN(cur)) cur = Number(Plan.BLOCK_DEFAULTS[key]);
+      get()[key] = String(Math.min(f.max, Math.max(f.min, cur + dir * f.step)));
+      saveAndRefresh();
+    }
+    dec.addEventListener("click", function () { step(-1); });
+    inc.addEventListener("click", function () { step(1); });
+    return { row: row, input: input, dec: dec, inc: inc, hint: row.querySelector(".row-hint") };
+  }
+
+  /** Rebuilds the cards of the extra blocks (only when blocks are added, removed or replaced). */
+  function renderBlocks() {
+    blocksBox.textContent = "";
+    blockRefs = [];
+    cfg.blocks.forEach(function (b, i) {
+      var card = document.createElement("section");
+      card.className = "setup-section block-card";
+      card.innerHTML =
+        '<div class="block-head"><h2></h2><button type="button" class="icon-btn" data-role="remove-block"></button></div>' +
+        '<div class="row name-row"><span class="row-text"><label class="row-label"></label></span>' + nameInputHTML("b" + i + "-name") + '</div>';
+      card.querySelector("h2").textContent = "Block " + (i + 2);
+      var rm = card.querySelector("[data-role=remove-block]");
+      rm.innerHTML = ICON_X;
+      rm.setAttribute("aria-label", "Remove block " + (i + 2));
+      rm.addEventListener("click", function () { cfg.blocks.splice(i, 1); saveAndRefresh(); });
+      var nameInput = card.querySelector("input");
+      card.querySelector("label").textContent = "Exercise";
+      card.querySelector("label").setAttribute("for", "b" + i + "-name");
+      nameInput.addEventListener("input", function () { cfg.blocks[i].name = nameInput.value; saveAndRefresh(); });
+      var refs = { name: nameInput, rows: {} };
+      ["gap", "work", "rest", "rounds"].forEach(function (key) {
+        refs.rows[key] = blockRow(i, key);
+        card.appendChild(refs.rows[key].row);
+      });
+      blockRefs.push(refs);
+      blocksBox.appendChild(card);
+    });
+    if (cfg.blocks.length) {
+      var note = document.createElement("p");
+      note.className = "block-note";
+      note.textContent = "Get ready runs once at the start and cool down once at the end of the whole workout.";
+      blocksBox.appendChild(note);
+    }
+    blocksBuilt = cfg.blocks.length;
+  }
+
+  /** Shows the current values in the block fields and marks the wrong ones. */
+  function refreshBlocks(check) {
+    if (blocksBuilt !== cfg.blocks.length) renderBlocks();
+    setHidden(name1Row, cfg.blocks.length === 0);
+    if (document.activeElement !== name1Input && name1Input.value !== (cfg.name1 || "")) name1Input.value = cfg.name1 || "";
+    setHidden(addBtn, cfg.blocks.length >= Plan.MAX_BLOCKS - 1);
+    cfg.blocks.forEach(function (b, i) {
+      var refs = blockRefs[i];
+      if (document.activeElement !== refs.name && refs.name.value !== (b.name || "")) refs.name.value = b.name || "";
+      Object.keys(refs.rows).forEach(function (key) {
+        var r = refs.rows[key], f = Plan.BLOCK_FIELDS[key];
+        var bad = !!check.errors["b" + i + "." + key];
+        if (f.seconds) {
+          var secs = Plan.parseField(key, b[key], Plan.BLOCK_FIELDS);
+          setText(r.input, secs === null ? "?" : Plan.formatClock(secs));
+          r.input.setAttribute("aria-label", f.label + ", block " + (i + 2) + ", " + (secs === null ? "not set" : secs + " seconds") + ". Tap to change");
+        } else if (document.activeElement !== r.input && r.input.value !== b[key]) r.input.value = b[key];
+        r.row.classList.toggle("is-bad", bad);
+        r.input.setAttribute("aria-invalid", bad ? "true" : "false");
+        var cur = parseInt(b[key], 10);
+        r.dec.disabled = !isNaN(cur) && cur <= f.min;
+        r.inc.disabled = !isNaN(cur) && cur >= f.max;
+        var hint;
+        if (bad) hint = f.seconds ? "Choose a time from " + Plan.formatClock(f.min) + " to " + Plan.formatClock(f.max) : "Enter a value from " + f.min + " to " + f.max;
+        else hint = key === "gap" ? "Before this block starts" : (f.seconds ? "min:sec" : f.min + " to " + f.max);
+        setText(r.hint, hint);
+      });
+    });
   }
 
   function saveAndRefresh() {
@@ -206,10 +378,11 @@
       else hint = f.seconds ? "min:sec · " + Plan.formatClock(f.min) + " to " + Plan.formatClock(f.max) : f.min + " to " + f.max;
       setText(r.hint, hint);
     });
+    refreshBlocks(check);
     if (check.ok) {
       var total = Plan.totalSeconds(Plan.buildPhases(check.values));
       setText($("setup-total"), Plan.formatClock(total));
-      setText($("setup-summary"), plural(check.values.rounds, "round") + " × " + plural(check.values.loops, "loop"));
+      setText($("setup-summary"), shapeText(shapeOfValues(check.values)));
     } else {
       setText($("setup-total"), "—");
       setText($("setup-summary"), "Fix the values in red");
@@ -267,8 +440,11 @@
     var phases = Plan.buildPhases(check.values);
     runner = new TabataRunner(phases);
     var w = loadedId ? store.get(loadedId) : null;
+    var shape = shapeOfValues(check.values);
     runInfo = {
       rounds: check.values.rounds, loops: check.values.loops, total: Plan.totalSeconds(phases),
+      blocks: shape.blocks, totalRounds: shape.totalRounds,
+      sections: check.values.loops + (check.values.extra || []).length, // loops of block 1 + one per extra block
       name: w ? w.name : presetName
     };
     lastJumps = -1;
@@ -282,7 +458,7 @@
     Sound.cancelAll();
     Sound.playNow("done");
     setText($("done-total"), Plan.formatClock(runInfo.total));
-    setText($("done-summary"), plural(runInfo.rounds, "round") + " × " + plural(runInfo.loops, "loop"));
+    setText($("done-summary"), shapeText(runInfo));
     history.add(runInfo);
     renderStreakCounts();
     var streak = history.streak();
@@ -326,20 +502,26 @@
       if (meta) meta.setAttribute("content", getComputedStyle(body).getPropertyValue("--" + ph.type).trim() || "#0B1620");
     }
 
-    setText($("run-phase"), Plan.PHASE_LABELS[ph.type]);
+    setText($("run-phase"), ph.label || Plan.PHASE_LABELS[ph.type]);
+    var exName = ph.name ? ph.name : (ph.next ? "Next: " + ph.next : "");
+    setText($("run-ex"), exName);
+    setHidden($("run-ex"), !exName);
     var secsEl = $("run-secs");
     setText(secsEl, String(secs));
     secsEl.classList.toggle("is-long", secs >= 100);
-    setText($("run-round"), ph.type === "prep" ? "Round – / " + runInfo.rounds : "Round " + ph.round + " / " + runInfo.rounds);
-    setText($("run-loop"), "Loop " + ph.loop + "/" + runInfo.loops);
-    setText($("run-next"), next ? Plan.PHASE_LABELS[next.type] + " · " + next.dur + " s" : "Finish");
+    var rr = ph.rounds || runInfo.rounds;
+    setText($("run-round"), ph.type === "prep" ? "Round – / " + rr : "Round " + ph.round + " / " + rr);
+    setText($("run-loop"), runInfo.blocks > 1 ? "Block " + (ph.block || 1) + "/" + runInfo.blocks : "Loop " + ph.loop + "/" + runInfo.loops);
+    setText($("run-next"), next ? (next.label || Plan.PHASE_LABELS[next.type]) + (next.name ? " · " + next.name : "") + " · " + next.dur + " s" : "Finish");
     setText($("run-left"), Plan.formatClock(Math.ceil(runner.remainingTotalMs(t) / 1000)));
 
     var c = Progress.counters(runner.phases, runner.idx, runInfo.rounds, runInfo.loops);
+    setText($("lbl-cnt-loop"), c.labels.loop);
+    setText($("lbl-cnt-work-loop"), c.labels.workLoop);
     setText($("cnt-loop"), c.loop);
     setText($("cnt-work-loop"), c.workLoop);
     setText($("cnt-work-total"), c.workTotal);
-    bar.render(Progress.barModel(runner.phases, runner.idx, elapsed / (ph.dur * 1000), runInfo.loops));
+    bar.render(Progress.barModel(runner.phases, runner.idx, elapsed / (ph.dur * 1000), runInfo.sections));
     $("run-bar").setAttribute("aria-label", "Workout progress: phase " + (runner.idx + 1) + " of " + runner.phases.length);
 
     var paused = runner.paused;
@@ -367,8 +549,7 @@
   function summaryOf(c) {
     var check = Plan.validate(c);
     if (!check.ok) return "";
-    return Plan.formatClock(Plan.totalSeconds(Plan.buildPhases(check.values))) + " · " +
-      plural(check.values.rounds, "round") + " × " + plural(check.values.loops, "loop");
+    return Plan.formatClock(Plan.totalSeconds(Plan.buildPhases(check.values))) + " · " + shapeText(shapeOfValues(check.values));
   }
 
   function renderSavedCount() {
@@ -440,11 +621,7 @@
   function openPreset(id) {
     var pr = Presets.get(id);
     if (!pr) return;
-    Object.keys(Plan.DEFAULTS).forEach(function (k) {
-      var d = Plan.DEFAULTS[k];
-      var v = k in pr.cfg ? pr.cfg[k] : d;
-      cfg[k] = typeof d === "boolean" ? !!v : String(v);
-    });
+    Object.assign(cfg, Plan.normalizeCfg(pr.cfg));
     loadedId = null;
     presetName = pr.name;
     Settings.saveSetup(cfg);
@@ -490,7 +667,7 @@
       li.innerHTML = '<span class="history-main"><span class="saved-name"></span><span class="history-when"></span></span><span class="saved-sum"></span>';
       li.querySelector(".saved-name").textContent = e.name || "Custom workout";
       li.querySelector(".history-when").textContent = whenText(e.t);
-      li.querySelector(".saved-sum").textContent = Plan.formatClock(e.total) + " · " + plural(e.rounds, "round") + " × " + plural(e.loops, "loop");
+      li.querySelector(".saved-sum").textContent = Plan.formatClock(e.total) + " · " + shapeText({ rounds: e.rounds, loops: e.loops, blocks: e.blocks || 1, totalRounds: e.totalRounds });
       list.appendChild(li);
     });
     setHidden($("history-empty"), items.length > 0);
@@ -501,11 +678,7 @@
   function openSaved(id) {
     var w = store.get(id);
     if (!w) return;
-    Object.keys(Plan.DEFAULTS).forEach(function (k) {
-      var d = Plan.DEFAULTS[k];
-      var v = k in w.cfg ? w.cfg[k] : d;
-      cfg[k] = typeof d === "boolean" ? !!v : String(v);
-    });
+    Object.assign(cfg, Plan.normalizeCfg(w.cfg));
     loadedId = id;
     presetName = "";
     store.markUsed(id);

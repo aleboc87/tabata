@@ -22,15 +22,22 @@
     Object.keys(defaults).forEach(function (k) {
       cfg[k] = typeof defaults[k] === "boolean" ? defaults[k] : String(defaults[k]);
     });
+    var keys = Object.keys(cfg);
+    cfg.name1 = "";
+    cfg.blocks = [];
     var raw = read(KEY);
     if (!raw) return cfg;
     try {
       var saved = JSON.parse(raw);
-      Object.keys(cfg).forEach(function (k) {
+      keys.forEach(function (k) {
         if (!(k in saved)) return;
         if (typeof cfg[k] === "boolean") cfg[k] = !!saved[k];
         else if (/^\d{1,4}$/.test(String(saved[k]))) cfg[k] = String(saved[k]);
       });
+      // exercise names and extra blocks (added in 1.5.0; older data has none)
+      var Plan = root.TabataPlan;
+      cfg.name1 = Plan ? Plan.cleanName(saved.name1) : "";
+      cfg.blocks = Plan ? Plan.cleanBlocks(saved.blocks) : [];
     } catch (e) { /* damaged data: use the defaults */ }
     return cfg;
   }

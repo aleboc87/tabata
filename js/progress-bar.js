@@ -57,21 +57,28 @@
    */
   function counters(phases, idx, rounds, loops) {
     var p = phases[idx];
+    var blocks = 1;
+    phases.forEach(function (x) { if ((x.block || 1) > blocks) blocks = x.block; });
+    var multi = blocks > 1;
+    // with several blocks the middle counter follows the block; otherwise it follows the loop
+    var group = function (x) { return multi ? (x.block || 1) : x.loop; };
     var inLoop = 0, inLoopDone = 0, total = 0, totalDone = 0;
+    // the rest between two blocks belongs to the block that starts after it, but its Work is counted in that block
     for (var i = 0; i < phases.length; i++) {
       if (phases[i].type !== "work") continue;
       total++;
       if (i <= idx) totalDone++;
-      if (phases[i].loop === p.loop) {
+      if (group(phases[i]) === group(p)) {
         inLoop++;
         if (i <= idx) inLoopDone++;
       }
     }
     var before = p.type === "prep";
     return {
-      loop: p.loop + "/" + loops,
+      loop: multi ? (p.block || 1) + "/" + blocks : p.loop + "/" + loops,
       workLoop: (before ? "\u2013" : inLoopDone) + "/" + inLoop,
-      workTotal: (before ? "\u2013" : totalDone) + "/" + total
+      workTotal: (before ? "\u2013" : totalDone) + "/" + total,
+      labels: multi ? { loop: "Block", workLoop: "Work \u00b7 block" } : { loop: "Loop", workLoop: "Work \u00b7 loop" }
     };
   }
 
